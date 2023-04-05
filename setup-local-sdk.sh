@@ -7,6 +7,7 @@ usage() {
   echo "Clones the matrix-rust-sdk repository & the kotlin components used for bindings" 1>&2;
   echo "Be sure to run this command from within the radiator directory as this store\nconfiguration files there" 1>&2;
   echo -e "Usage: \n\t$0 [-c] - clones the sdk" 1>&2; 
+  echo -e "       \t$0 [-r] - clones the radiator fork of the sdk" 1>&2; 
   echo -e "       \t$0 [-b] - builds the sdk and copies files into radiator directory" 1>&2; 
   exit 1;
 }
