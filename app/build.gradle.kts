@@ -9,6 +9,14 @@ fun composeVersion(): String {
 }
 
 android {
+    signingConfigs {
+        create("release") {
+            storeFile = file("/home/cx/dev/foss/cx/android-keys/radiator/private_key.pepk")
+            storePassword = "#idx2003"
+            keyAlias = "release-key"
+            keyPassword = "release-key"
+        }
+    }
     namespace = "com.app.radiator"
     compileSdk = 33
 
@@ -23,6 +31,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        signingConfig = signingConfigs.getByName("debug")
     }
 
     buildTypes {
@@ -57,19 +66,19 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.20")
     // required to be able to use rustsdk
     implementation("net.java.dev.jna:jna:5.13.0@aar")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.0-beta01")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.3.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
 
     // Nav Controller
     val navVersion = "2.5.3"
     implementation("androidx.navigation:navigation-compose:$navVersion")
 
-    implementation("androidx.core:core-ktx:1.7.0")
+    implementation("androidx.core:core-ktx:1.9.0")
 
-    implementation("androidx.activity:activity-compose:1.3.1")
+    implementation("androidx.activity:activity-compose:1.7.0")
     implementation("androidx.compose.ui:ui:$composeVersion")
     implementation("androidx.compose.ui:ui-tooling-preview:$composeVersion")
-    implementation("androidx.compose.material3:material3:1.0.0-alpha11")
+    implementation("androidx.compose.material3:material3:1.1.0-beta01")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
