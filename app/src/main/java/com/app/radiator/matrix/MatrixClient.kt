@@ -278,9 +278,6 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             // N.B. summary emitter blocks this coroutine until _all_ subscribers have been notified.
             coroutineScope.launch {
                 val summaries = summary.rooms.map { slidingSyncRoomManager.getRoomSummary(it) }.toList()
-                for(room in summary.rooms) {
-                    roomListSummaries.addAll(summaries)
-                }
                 summaryEmitter.emit(summaries)
             }
         }

@@ -3,17 +3,26 @@ package com.app.radiator
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -24,6 +33,7 @@ import com.app.radiator.ui.theme.RadiatorTheme
 import kotlinx.coroutines.*
 import org.matrix.rustcomponents.sdk.*
 import kotlin.io.path.exists
+import kotlin.system.measureNanoTime
 
 class ClientErrorHandler : ClientDelegate {
     override fun didReceiveAuthError(isSoftLogout: Boolean) {
@@ -47,9 +57,6 @@ sealed class Routes(val route: String) {
 }
 
 val homeServer = "matrix.org"
-val userId = "@simonfarre:matrix.org"
-val password = "#idx2003CANCER"
-
 
 suspend fun Foo() {
 
@@ -61,6 +68,7 @@ class MainActivity : ComponentActivity() {
 
         applicationSetup(app = application)
         val matrixClient = MatrixClient()
+
         setContent {
             RadiatorTheme {
                 // A surface container using the 'background' color from the theme
@@ -69,16 +77,76 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
+                    val coroutineScope = rememberCoroutineScope()
                     NavHost(navController = navController, startDestination = Routes.Login.route) {
                         composable(Routes.Login.route) {
-                            LoginScreen(matrixClient = matrixClient, navController=navController)
+                            val isLoggedIn =
+                                matrixClient.isLoggedIn().collectAsState(initial = false)
+
+                            val onLoginClick = { userId: String, password: String ->
+                                if (!isLoggedIn.value) {
+                                    val authenticationService = AuthenticationService(
+                                        SystemInterface.applicationDataDir(),
+                                        null,
+                                        null
+                                    )
+                                    if (SystemInterface.getApplicationFilePath(
+                                            convertUserIdToFileName(userId)
+                                        ).exists()
+                                    ) {
+                                        val session = deserializeSession(userId)
+                                        if (session != null) {
+                                            coroutineScope.launch {
+                                                try {
+                                                    authenticationService.configureHomeserver(
+                                                        homeServer
+                                                    )
+                                                } catch (e: AuthenticationException) {
+                                                    authenticationService.configureHomeserver(
+                                                        session.slidingSyncProxy!!
+                                                    )
+                                                }
+                                                matrixClient.restoreSession(
+                                                    authService = authenticationService,
+                                                    session = session
+                                                )
+                                            }
+                                        }
+                                        navController.navigate(route = Routes.RoomList.route)
+                                    } else {
+                                        coroutineScope.launch {
+                                            authenticationService.configureHomeserver("matrix.org")
+                                            matrixClient.login(
+                                                authService = authenticationService,
+                                                userName = userId,
+                                                password = password
+                                            )
+                                        }
+                                        navController.navigate(route = Routes.RoomList.route)
+                                    }
+                                }
+                            }
+                            LoginScreen(onLogin = onLoginClick)
                         }
 
                         composable(Routes.RoomList.route) {
                             val currentRoomList = matrixClient.rememberGetRoomSummaries()
-                            val flow = matrixClient.slidingSyncListener.summaryFlow().collectAsState(initial = listOf())
-                            currentRoomList.addAll(flow.value)
-                            if(currentRoomList.isNotEmpty())
+                            val updates = matrixClient.slidingSyncListener.summaryFlow()
+                                .collectAsState(initial = listOf())
+                            val elapsed = measureNanoTime {
+                                for (item in updates.value) {
+                                    val idx = currentRoomList.indexOfFirst { it.id == item.id }
+                                    if (idx != -1) {
+                                        currentRoomList.set(idx, item)
+                                    } else {
+                                        currentRoomList.add(item)
+                                    }
+                                }
+                            }
+
+                            println("applied diff in $elapsed")
+
+                            if (currentRoomList.isNotEmpty())
                                 RoomList(roomList = currentRoomList)
                             else
                                 Text("We don't have any summaries :(")
@@ -95,68 +163,90 @@ fun RoomList(roomList: List<RoomListRoomSummary>) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         roomList.forEach {
             RoomSummaryRow(room = it)
+            Spacer(
+                modifier = Modifier
+                    .height(5.dp)
+                    .border(BorderStroke(width = 1.dp, Color.Green))
+            )
         }
     }
 }
 
+@Preview
 @Composable
-fun LoginScreen(matrixClient: MatrixClient, navController: NavController, modifier: Modifier = Modifier) {
-    var username by remember { mutableStateOf<String>(userId) }
-    var password by remember { mutableStateOf<String>(password) }
-    val coroutineScope = rememberCoroutineScope()
-    val isLoggedIn = matrixClient.isLoggedIn().collectAsState(initial = false)
-    Column(
+fun LoginField(
+    input: String = "",
+    label: String = "",
+    placeholder: @Composable (() -> Unit)? = null,
+    leadingIcon: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    onValueChange: (String) -> Unit = {},
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+) {
+    OutlinedTextField(
+        value = input,
+        onValueChange = onValueChange,
+        placeholder = placeholder,
+        label = { Text(label) },
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        visualTransformation = visualTransformation
+    )
+}
+
+@Preview
+@Composable
+fun LoginScreen(
+    modifier: Modifier = Modifier,
+    onLogin: (userName: String, password: String) -> Unit = { un, pw -> }
+) {
+    var username by remember { mutableStateOf<String>("") }
+    var password by remember { mutableStateOf<String>("") }
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(verticalArrangement = Arrangement.Center) {
-                Text("Username")
-            }
-            Column(verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 5.dp)) {
-                TextField(value = username, onValueChange = { username = it })
-            }
-        }
-        Row(
-            Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(0.3f)
+                .padding(16.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 32.dp,
+                        topEnd = 32.dp,
+                        bottomStart = 32.dp,
+                        bottomEnd = 32.dp
+                    )
+                )
+                .background(Color.Blue)
+
+        )
+        Column(
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(2.dp)
-            , verticalAlignment = Alignment.CenterVertically) {
-            Column(verticalArrangement = Arrangement.Center) {
-                Text("Password")
-            }
-            Column(verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 5.dp)) {
-                TextField(value = password, onValueChange = { password = it })
-            }
-        }
-        Row() {
-            Button(onClick = {
-                if(!isLoggedIn.value) {
-                    val authenticationService = AuthenticationService(SystemInterface.applicationDataDir(), null, null)
-                    if(SystemInterface.getApplicationFilePath(convertUserIdToFileName(userId)).exists()) {
-                        val session = deserializeSession(userId)
-                        if(session != null) {
-                            coroutineScope.launch {
-                                try {
-                                    authenticationService.configureHomeserver(homeServer)
-                                } catch(e: AuthenticationException) {
-                                    println("falling back to sliding sync proxy....")
-                                    authenticationService.configureHomeserver(session.slidingSyncProxy!!)
-                                }
-                                matrixClient.restoreSession(authService = authenticationService, session=session)
-                            }
-                        }
-                    } else {
-                        coroutineScope.launch {
-                            authenticationService.configureHomeserver("matrix.org")
-                            matrixClient.login(authService = authenticationService, userName = userId, password=password)
-                        }
-                    }
-                }
-                navController.navigate(route = Routes.RoomList.route)
-            }) {
-                Text("Click me to log in")
+                .verticalScroll(rememberScrollState())
+                .padding(5.dp)
+                .padding(top = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            LoginField(
+                input = username,
+                label = "Username",
+                onValueChange = { username = it },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Username") })
+            LoginField(
+                input = password,
+                label = "Password",
+                onValueChange = { password = it },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password") },
+                visualTransformation = PasswordVisualTransformation()
+            )
+            Button(
+                modifier = Modifier.padding(top = 16.dp),
+                onClick = { onLogin(username, password) }) {
+                Text("Log in")
             }
         }
     }
@@ -164,7 +254,7 @@ fun LoginScreen(matrixClient: MatrixClient, navController: NavController, modifi
 
 @Composable
 fun StartScreen(isLoggedIn: Boolean, modifier: Modifier = Modifier) {
-    if(!isLoggedIn) {
+    if (!isLoggedIn) {
         Text(text = "Hello fucker. You are Not logged in")
     } else {
         Text(text = "Hello fucker. You ARE logged in. CAN YOU BELIEVE THAT?")

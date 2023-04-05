@@ -16,6 +16,8 @@
 -keep class com.sun.jna.** { *; }
 -keep class * implements com.sun.jna.** { *; }
 
+-printconfiguration /home/cx/dev/foss/cx/radiator/dev-rapports
+
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable
