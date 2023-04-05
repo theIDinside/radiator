@@ -39,12 +39,18 @@ build_sdk() {
   exit 0;
 }
 
-while getopts "cb" o; do
+while getopts "rcb" o; do
     case "${o}" in
+        r)
+            echo "Cloning radiator fork of rust sdk"
+            clone_into ./matrix-sdk git@github.com:theIDinside/matrix-rust-sdk.git
+            clone_into ./matrix-sdk git@github.com:theIDinside/matrix-rust-components-kotlin.git
+            ;;
         c)
             echo "Cloning projects to ${s}"
             clone_into ./matrix-sdk "$sdk_url"
             clone_into ./matrix-sdk "$kotlin_components"
+            exit
             ;;
         b)
             build_sdk
