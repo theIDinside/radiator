@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -9,14 +11,6 @@ fun composeVersion(): String {
 }
 
 android {
-    signingConfigs {
-        create("release") {
-            storeFile = file("/home/cx/dev/foss/cx/android-keys/radiator/private_key.pepk")
-            storePassword = "#idx2003"
-            keyAlias = "release-key"
-            keyPassword = "release-key"
-        }
-    }
     namespace = "com.app.radiator"
     compileSdk = 33
 
@@ -36,8 +30,9 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            isDebuggable = false
         }
     }
     compileOptions {
@@ -72,19 +67,16 @@ dependencies {
     // Nav Controller
     val navVersion = "2.5.3"
     implementation("androidx.navigation:navigation-compose:$navVersion")
-
-    implementation("androidx.core:core-ktx:1.9.0")
-
+    implementation("androidx.core:core-ktx:1.10.0")
     implementation("androidx.activity:activity-compose:1.7.0")
     implementation("androidx.compose.ui:ui:$composeVersion")
     implementation("androidx.compose.ui:ui-tooling-preview:$composeVersion")
-    implementation("androidx.compose.material3:material3:1.1.0-beta01")
+    implementation("androidx.compose.material3:material3:1.1.0-beta02")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:$composeVersion")
     debugImplementation("androidx.compose.ui:ui-tooling:$composeVersion")
     debugImplementation("androidx.compose.ui:ui-test-manifest:$composeVersion")
-
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.5")
 }
