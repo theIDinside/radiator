@@ -1,6 +1,56 @@
 package com.app.radiator.ui.theme
 
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+
+object RadiatorTheme {
+    val colors: RadiatorThemeColors
+        @Composable
+        @ReadOnlyComposable
+        get() = radiatorThemeColorsSetting.current
+}
+
+val radiatorThemeColorsSetting = staticCompositionLocalOf { lightRadiatorTheme }
+
+@Stable
+class RadiatorThemeColors(
+    messageFromMeBackground: Color,
+    messageFromOtherBackground: Color,
+    messageHighlightedBackground: Color,
+    quaternary: Color,
+    quinary: Color,
+    textActionCritical: Color,
+    isLight: Boolean,
+) {
+    var messageFromMeBackground by mutableStateOf(messageFromMeBackground)
+        private set
+    var messageFromOtherBackground by mutableStateOf(messageFromOtherBackground)
+        private set
+    var messageHighlightedBackground by mutableStateOf(messageHighlightedBackground)
+        private set
+
+    var quaternary by mutableStateOf(quaternary)
+        private set
+
+    var quinary by mutableStateOf(quinary)
+        private set
+
+    var textActionCritical by mutableStateOf(textActionCritical)
+        private set
+
+    var isLight by mutableStateOf(isLight)
+        private set
+
+    fun updateColorsFrom(other: RadiatorThemeColors) {
+        messageFromMeBackground = other.messageFromMeBackground
+        messageFromOtherBackground = other.messageFromOtherBackground
+        messageHighlightedBackground = other.messageHighlightedBackground
+        quaternary = other.quaternary
+        quinary = other.quinary
+        textActionCritical = other.textActionCritical
+        isLight = other.isLight
+    }
+}
 
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
@@ -55,3 +105,12 @@ val LinkColor = Color(0xFF0086E6)
 val TextColorCriticalLight = Color(0xFFD51928)
 val TextColorCriticalDark = Color(0xfffd3e3c)
 
+val lightRadiatorTheme = RadiatorThemeColors(
+    messageFromMeBackground = SystemGrey5Light,
+    messageFromOtherBackground = SystemGrey6Light,
+    messageHighlightedBackground = Azure,
+    quaternary = Gray_100,
+    quinary = Gray_50,
+    textActionCritical = TextColorCriticalLight,
+    isLight = true,
+)

@@ -1,7 +1,6 @@
 package com.app.radiator.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -30,30 +29,6 @@ val AvatarGradientStart = Color(0x0F4CA1AF)
 val AvatarGradientEnd = Color(0xFFF000E5)
 
 @Composable
-fun Avatar(avatarData: AvatarData, modifier: Modifier = Modifier) {
-    val commonModifier = modifier
-        .size(avatarData.size.dp)
-        .clip(CircleShape)
-    if (avatarData.url == null) {
-        InitialsAvatar(
-            avatarData = avatarData,
-            modifier = commonModifier,
-        )
-    } else {
-        InitialsAvatar(
-            avatarData = avatarData,
-            modifier = commonModifier,
-        )
-        /*
-        ImageAvatar(
-            avatarData = avatarData,
-            modifier = commonModifier,
-        )
-         */
-    }
-}
-
-@Composable
 private fun ImageAvatar(
     avatarData: AvatarData,
     modifier: Modifier = Modifier,
@@ -73,31 +48,6 @@ private fun ImageAvatar(
      */
 }
 
-@Composable
-private fun InitialsAvatar(
-    avatarData: AvatarData,
-    modifier: Modifier = Modifier,
-) {
-    val initialsGradient = Brush.linearGradient(
-        listOf(
-            AvatarGradientStart,
-            AvatarGradientEnd,
-        ),
-        start = Offset(0.0f, 100f),
-        end = Offset(100f, 0f)
-    )
-    Box(
-        modifier.background(brush = initialsGradient)
-    ) {
-        Text(
-            modifier = Modifier.align(Alignment.Center),
-            text = avatarData.getInitial(),
-            fontSize = (avatarData.size.dp / 2).value.sp,
-            color = Color.White,
-        )
-    }
-}
-
 sealed class AvatarSize(open val dp: Dp) {
 
     object SMALL : AvatarSize(32.dp)
@@ -113,8 +63,7 @@ sealed class AvatarSize(open val dp: Dp) {
 data class AvatarData(
     val id: String,
     val name: String?,
-    val url: String? = null,
-    val size: AvatarSize = AvatarSize.MEDIUM
+    val url: String? = null
 ) {
     fun getInitial(): String {
         val firstChar = name?.firstOrNull() ?: id.getOrNull(1) ?: '?'
@@ -122,27 +71,27 @@ data class AvatarData(
     }
 }
 
-fun avatarData(slidingSyncRoom: SlidingSyncRoom, room: Room): AvatarData {
-    return AvatarData(id = slidingSyncRoom.roomId(), name = slidingSyncRoom.name(), url = room.avatarUrl())
+fun avatarData(slidingSyncRoom: SlidingSyncRoom): AvatarData {
+    return AvatarData(id = slidingSyncRoom.roomId(), name = slidingSyncRoom.name(), url = slidingSyncRoom.avatarUrl())
 }
 
 @Immutable
-data class RoomListRoomSummary(
-    val id: String,
+data class RoomSummary(
+    val id: Int,
     val roomId: String,
     val name: String = "",
     val hasUnread: Boolean = false,
     val timestamp: String? = null,
     val lastMessage: AnnotatedString,
-    val avatarData: AvatarData = AvatarData(id, name),
+    val avatarData: AvatarData = AvatarData(roomId, name),
     val isPlaceholder: Boolean = false,
 )
 
 @Composable
 internal fun RoomSummaryRow(
-    room: RoomListRoomSummary,
+    room: RoomSummary,
     modifier: Modifier = Modifier,
-    onClick: (RoomListRoomSummary) -> Unit = {},
+    onClick: (RoomSummary) -> Unit = {},
 ) {
     val clickModifier = if (room.isPlaceholder) {
         modifier
@@ -165,7 +114,7 @@ internal fun RoomSummaryRow(
 
 @Composable
 internal fun DefaultRoomSummaryRow(
-    room: RoomListRoomSummary,
+    room: RoomSummary,
 ) {
     Row(
         modifier = Modifier

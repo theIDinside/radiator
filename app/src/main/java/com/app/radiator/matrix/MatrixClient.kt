@@ -1,13 +1,13 @@
 package com.app.radiator.matrix
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.text.AnnotatedString
-import com.app.radiator.ClientErrorHandler
-import com.app.radiator.CoroutineDispatchers
-import com.app.radiator.logError
-import com.app.radiator.ui.components.RoomListRoomSummary
+import com.app.radiator.*
+import com.app.radiator.matrix.timeline.TimelineState
+import com.app.radiator.ui.components.RoomSummary
 import com.app.radiator.ui.components.avatarData
+import kotlinx.collections.immutable.ImmutableCollection
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.matrix.rustcomponents.sdk.*
@@ -17,6 +17,8 @@ import kotlin.io.path.exists
 import kotlin.io.path.readLines
 import kotlin.io.path.writeLines
 import kotlin.reflect.full.memberProperties
+
+typealias RoomSummaryMap = HashMap<String, RoomSummary>
 
 private fun defaultDispatchers(): CoroutineDispatchers {
     return CoroutineDispatchers(
@@ -29,8 +31,8 @@ private fun defaultDispatchers(): CoroutineDispatchers {
 
 fun convertUserIdToFileName(userId: String): String {
     var endPos = userId.indexOfLast { it == ':' }
-    if(endPos == -1) endPos = userId.length
-    return userId.substring(1 .. endPos)
+    if (endPos == -1) endPos = userId.length
+    return userId.substring(1..endPos)
 }
 
 class SerializedSession(private val data: String) : Iterable<String> {
@@ -40,7 +42,7 @@ class SerializedSession(private val data: String) : Iterable<String> {
 // todo(improvement): serialize to a better format than a simple "TOML"-like format
 private fun serializeSession(session: Session): SerializedSession {
     val data =
-"""${session.userId}
+        """${session.userId}
 ${session.homeserverUrl}
 ${session.deviceId}
 ${session.accessToken}
@@ -59,24 +61,26 @@ val serializeFormat: Map<String, Int> = listOf(
 ).toMap()
 
 private fun saveSerializedSession(session: Session) {
-    val sanitizeFileName = convertUserIdToFileName(session.userId)
-    val file = SystemInterface.getApplicationFilePath(sanitizeFileName)
-    val serialized = serializeSession(session=session)
+    val sessionFileName = "session"
+    val file = SystemInterface.getApplicationFilePath(sessionFileName)
+    val serialized = serializeSession(session = session)
     file.writeLines(serialized)
-    println("Wrote: ${serializeSession(session=session).joinToString { "" }} to $sanitizeFileName")
+    println("Wrote: ${serializeSession(session = session).joinToString { "" }} to $sessionFileName")
 }
 
-class UnexpectedFormat(additionalInfo: String = "") : Exception("File contained unexpected format. $additionalInfo") {}
+class UnexpectedFormat(additionalInfo: String = "") :
+    Exception("File contained unexpected format. $additionalInfo") {}
 
-fun deserializeSession(userId: String): Session? {
-    val sanitizeFileName = convertUserIdToFileName(userId)
-    val file = SystemInterface.getApplicationFilePath("$sanitizeFileName")
+fun deserializeSession(): Session? {
+    val sessionFileName = "session"
+    val file = SystemInterface.getApplicationFilePath(sessionFileName)
     if (!file.exists())
         return null
     val lines = file.readLines()
     if (lines.size != 6) throw UnexpectedFormat("Did not contain 6 lines")
     val values = Session::class.memberProperties.associate { prop ->
-        val value = if(lines[serializeFormat[prop.name]!!] == "null") null else lines[serializeFormat[prop.name]!!]
+        val value =
+            if (lines[serializeFormat[prop.name]!!] == "null") null else lines[serializeFormat[prop.name]!!]
         Pair(prop.name, value)
     }
     return Session(
@@ -94,13 +98,13 @@ data class SlidingSyncJobManager(val slidingSync: SlidingSync) {
     private var taskHandle = slidingSync.sync()
 
     fun start() {
-        if(atomicHasStarted.compareAndSet(false, true)) {
-           taskHandle = slidingSync.sync()
+        if (atomicHasStarted.compareAndSet(false, true)) {
+            taskHandle = slidingSync.sync()
         }
     }
 
     fun stop() {
-        if(atomicHasStarted.compareAndSet(true, false)) {
+        if (atomicHasStarted.compareAndSet(true, false)) {
             taskHandle.use {
                 it.cancel()
             }
@@ -111,15 +115,15 @@ data class SlidingSyncJobManager(val slidingSync: SlidingSync) {
 // Override the SlidingSyncObserver interface, so that we can communicate the updates
 // in arbitrary ways (that suits us)
 interface SummaryFlow : SlidingSyncObserver {
-    fun summaryFlow(): SharedFlow<List<RoomListRoomSummary>>
+    fun summaryFlow(): StateFlow<List<RoomSummary>>
 
     fun setDebugLogger(logger: () -> Unit)
 }
 
 
-typealias RoomId = String;
+typealias RoomId = String
 
-interface SlidingSyncRoomManager {
+interface SlidingSyncRoomManager : Disposable {
     fun pushFront(roomId: RoomId)
     fun pushBack(roomId: RoomId)
     fun popBack()
@@ -132,98 +136,222 @@ interface SlidingSyncRoomManager {
     fun clear()
     fun reset(roomIds: List<RoomId>)
 
-    fun getRoomSummary(roomId: String): RoomListRoomSummary
-    fun getRoomWithIndexSummary(index: Int): RoomListRoomSummary
+    fun getRoomSummary(roomId: String): RoomSummary
+    fun getRoomWithIndexSummary(index: Int): RoomSummary
 
-    fun getSummariesByIndex(indices: List<Int>): List<RoomListRoomSummary>
-    fun getSummariesOf(indices: List<RoomId>): List<RoomListRoomSummary>
-    fun getAllSummaries(): List<RoomListRoomSummary>
+    fun getSummariesByIndex(indices: List<Int>): List<RoomSummary>
+    fun getSummariesOf(indices: List<RoomId>): List<RoomSummary>
+    fun getAllSummaries(): List<RoomSummary>
+
+    fun getSlidingSyncRoom(roomId: String): SlidingSyncRoom
+    fun initializeRoom(roomId: String)
+
+    fun getTimelineState(roomId: String): TimelineState
 }
 
 // Make _all_ wrapped types public. Everything else, is fucking stupid.
 class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDispatchers()) {
 
+    private val slidingSyncListCoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io)
+    private val slidingSyncState = MutableStateFlow(SlidingSyncState.NOT_LOADED)
+    var hadSession = false
+
+    init {
+        val authenticationService = AuthenticationService(
+            SystemInterface.applicationDataDir(),
+            null,
+            null
+        )
+        val path = SystemInterface.getApplicationFilePath("session")
+        if (path.exists()) {
+            val session = deserializeSession()
+            if (session != null) {
+                runBlocking {
+                    slidingSyncListCoroutineScope.launch {
+                        try {
+                            authenticationService.configureHomeserver(
+                                homeServer
+                            )
+                        } catch (e: AuthenticationException) {
+                            authenticationService.configureHomeserver(
+                                session.slidingSyncProxy!!
+                            )
+                        }
+                        this@MatrixClient.restoreSession(
+                            authService = authenticationService,
+                            session = session
+                        )
+                        hadSession = true
+                    }
+                }
+            }
+        }
+    }
+
+    /// Companion object manages the SlidingSync rooms that we've been sent so far
+    /// It is also responsible for producing the final data output that is given to
+    /// jetpack compose to render in the form of `RoomSummary`
     val slidingSyncRoomManager = object : SlidingSyncRoomManager {
         val slidingSyncRoomsMap = HashMap<String, SlidingSyncRoom>()
         val slidingSyncRoomList = ArrayList<RoomId>()
+        val timelineStates = HashMap<String, TimelineState>()
 
         private fun list() = slidingSyncRoomList
-        private fun map() = slidingSyncRoomsMap
+
+        override fun destroy() {
+            /*
+            slidingSyncRoomsMap.values.forEach {
+                it.destroy()
+            }
+            slidingSyncRoomsMap.clear()
+            slidingSyncRoomsIdMap.clear()
+            slidingSyncRoomList.clear()
+            clientRoomId = -1
+
+             */
+        }
+
+        fun addNewMapping(roomId: String) {
+            /*
+            slidingSyncRoomsIdMap[roomId] = clientRoomId
+            clientRoomId++
+             */
+        }
 
         override fun pushFront(roomId: RoomId) {
+            /*
             insert(0, roomId)
+
+             */
         }
 
         override fun pushBack(roomId: RoomId) {
+            /*
             val room = slidingSync().getRoom(roomId)!!
+            addNewMapping(roomId)
             slidingSyncRoomList.add(roomId)
             slidingSyncRoomsMap[roomId] = room
+
+             */
         }
 
         override fun popBack() {
+            /*
             val sz = list().size
             val roomId = list().removeAt(sz - 1)
-            map().remove(roomId)?.destroy()
+            slidingSyncRoomsMap.remove(roomId)?.destroy()
+
+             */
         }
 
         override fun popFront() {
+            /*
             val roomId = list().removeAt(0)
-            map().remove(roomId)?.destroy()
+            slidingSyncRoomsMap.remove(roomId)?.destroy()
+
+             */
         }
 
         override fun removeRoom(roomId: RoomId) {
-            map().remove(roomId)?.destroy()
+            /*
+            slidingSyncRoomsMap.remove(roomId)?.destroy()
             list().removeIf { it == roomId }
+             */
         }
 
         override fun removeRoomAtIndex(index: Int) {
+            /*
             val roomId = list()[index]
-            map().remove(roomId)?.destroy()
+            slidingSyncRoomsMap.remove(roomId)?.destroy()
+
+             */
         }
 
         override fun insert(index: Int, roomId: RoomId) {
+            /*
             val room = slidingSync().getRoom(roomId)!!
             list().add(index, roomId)
-            map()[roomId] = room
+            slidingSyncRoomsMap[roomId] = room
+
+             */
         }
 
         override fun set(index: Int, roomId: RoomId) {
+            /*
             val roomIdToBeRemoved = list()[index]
-            map().remove(roomIdToBeRemoved)?.destroy()
-
+            slidingSyncRoomsMap.remove(roomIdToBeRemoved)?.destroy()
             list()[index] = roomId
             val room = slidingSync().getRoom(roomId)!!
-            map()[roomId] = room
+            slidingSyncRoomsMap[roomId] = room
+
+             */
         }
 
         override fun clear() {
-            map().values.forEach { it.destroy() }
-            map().clear()
+            /*
+            slidingSyncRoomsMap.values.forEach { it.destroy() }
+            slidingSyncRoomsMap.clear()
             list().clear()
+             */
         }
 
         override fun reset(roomIds: List<RoomId>) {
+            /*
             clear()
-            for(roomId in roomIds) {
+            for (roomId in roomIds) {
                 pushBack(roomId)
             }
+             */
         }
 
-        override fun getRoomSummary(roomId: String): RoomListRoomSummary {
-            if(map()[roomId] == null) {
-                map()[roomId] = slidingSync().getRoom(roomId)!!
+        override fun getSlidingSyncRoom(roomId: String): SlidingSyncRoom {
+            var room = slidingSyncRoomsMap[roomId]
+            if(room == null) {
+                room = slidingSync().getRoom(roomId)!!
+                slidingSyncRoomsMap[roomId] = room
             }
-            val ss = map()[roomId]!!
-            val room = ss.fullRoom()!!
-            val name = ss.name()
+            return room
+        }
 
-            val avatarData = avatarData(ss, room)
+        override fun initializeRoom(
+            roomId: String
+        ) {
+            this.timelineStates[roomId] = TimelineState(
+                slidingSyncRoomsMap[roomId]!!,
+                coroutineScope = slidingSyncListCoroutineScope,
+                diffApplyDispatcher = dispatchers.diffUpdateDispatcher
+            )
+        }
+
+        override fun getTimelineState(roomId: String) : TimelineState {
+            return this.timelineStates[roomId]!!
+        }
+
+        override fun getRoomSummary(roomId: String): RoomSummary {
+            if (slidingSyncRoomsMap[roomId] == null) {
+                slidingSyncRoomsMap[roomId] = slidingSync().getRoom(roomId)!!
+                addNewMapping(roomId)
+            }
+
+            val ss = slidingSyncRoomsMap[roomId]!!
+            val avatarData = avatarData(ss)
             val latestRoomMessage = ss.latestRoomMessage()?.use {
                 // TODO(implement extracting actual text message, for now just debug print it)
-                when(val kind = it.content().kind()) {
+                when (val kind = it.content().kind()) {
                     is TimelineItemContentKind.FailedToParseMessageLike -> kind.error
                     is TimelineItemContentKind.FailedToParseState -> kind.error
-                    is TimelineItemContentKind.Message -> it.content().asMessage()?.use { msg -> msg.body() }
+                    is TimelineItemContentKind.Message -> it.content().asMessage()?.use { msg ->
+                        when (val type = msg.msgtype()) {
+                            is MessageType.Audio -> type.content.body
+                            is MessageType.Emote -> type.content.body
+                            is MessageType.File -> type.content.body
+                            is MessageType.Image -> type.content.source.url()
+                            is MessageType.Notice -> type.content.body
+                            is MessageType.Text -> type.content.body
+                            is MessageType.Video -> type.content.body
+                            null -> TODO()
+                        }
+                    }
                     is TimelineItemContentKind.ProfileChange -> "profile change by foo"
                     is TimelineItemContentKind.RedactedMessage -> kind.toString()
                     is TimelineItemContentKind.RoomMembership -> "${kind.userId} changed user id"
@@ -232,11 +360,12 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
                     is TimelineItemContentKind.UnableToDecrypt -> "Unable to decrypt: ${kind.msg.toString()}"
                 }
             }
-            return RoomListRoomSummary(
-                id = room.id(),
-                roomId = room.id(),
+            return RoomSummary(
+                id = 0,
+                roomId = roomId,
                 name = ss.name() ?: "Unknown name",
-                hasUnread = ss.unreadNotifications().use { it.notificationCount() != 0u },
+                hasUnread = ss.unreadNotifications().use
+                { it.notificationCount() != 0u },
                 timestamp = null,
                 lastMessage = AnnotatedString(latestRoomMessage ?: "Could not retrieve message"),
                 avatarData = avatarData,
@@ -244,28 +373,32 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             )
         }
 
-        override fun getRoomWithIndexSummary(index: Int): RoomListRoomSummary {
+        override fun getRoomWithIndexSummary(index: Int): RoomSummary {
             val roomId = list()[index]
             return getRoomSummary(roomId)
         }
 
-        override fun getSummariesByIndex(indices: List<Int>): List<RoomListRoomSummary> =
+        override fun getSummariesByIndex(indices: List<Int>): List<RoomSummary> =
             indices.map { getRoomWithIndexSummary(it) }.toList()
 
-        override fun getSummariesOf(rooms: List<RoomId>): List<RoomListRoomSummary> =
+        override fun getSummariesOf(rooms: List<RoomId>): List<RoomSummary> =
             rooms.map { getRoomSummary(it) }.toList()
 
-        override fun getAllSummaries(): List<RoomListRoomSummary> = list().map { getRoomSummary(it) }.toList()
+        override fun getAllSummaries(): List<RoomSummary> =
+            list().map { getRoomSummary(it) }.toList()
     }
 
     val slidingSyncListener = object : SummaryFlow {
+
         private val coroutineScope: CoroutineScope = SystemInterface.appCoroutineScope()
         var eventListener: () -> Unit = {}
         private val extraBufferCapacity: Int = 128
-        private val summaryEmitter = MutableSharedFlow<List<RoomListRoomSummary>>(extraBufferCapacity = extraBufferCapacity)
-        val updateSummaryFlow: SharedFlow<List<RoomListRoomSummary>> = summaryEmitter.asSharedFlow()
+        private val roomMap = RoomSummaryMap()
+        private val summaryEmitter =
+            MutableStateFlow<List<RoomSummary>>(emptyList())
+        val updateSummaryFlow: StateFlow<List<RoomSummary>> = summaryEmitter.asStateFlow()
 
-        override fun summaryFlow(): SharedFlow<List<RoomListRoomSummary>> {
+        override fun summaryFlow(): StateFlow<List<RoomSummary>> {
             return updateSummaryFlow
         }
 
@@ -274,60 +407,53 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
         }
 
         override fun didReceiveSyncUpdate(summary: UpdateSummary) {
-            println("SyncUpdate (${System.identityHashCode(summary)}): $summary in scope $coroutineScope")
+            println("SyncUpdate (${System.identityHashCode(summary)}): $summary in scope $slidingSyncListCoroutineScope")
             // N.B. summary emitter blocks this coroutine until _all_ subscribers have been notified.
-            coroutineScope.launch {
-                val summaries = summary.rooms.map { slidingSyncRoomManager.getRoomSummary(it) }.toList()
-                summaryEmitter.emit(summaries)
+            slidingSyncListCoroutineScope.launch {
+                withContext(dispatchers.io) {
+                    val summaries = summary.rooms.map { slidingSyncRoomManager.getRoomSummary(it) }.toList()
+                    for(room in summaries) {
+                        roomMap[room.roomId] = room
+                    }
+                    summaryEmitter.value = roomMap.values.toImmutableList()
+                    summaryEmitter.emit(summaryEmitter.value)
+                }
             }
         }
     }
+
     lateinit var client: Client
     lateinit var slidingSyncJobManager: SlidingSyncJobManager
     lateinit var slidingSyncList: SlidingSyncList
-    lateinit var slidingSyncRooms: ArrayList<SlidingSyncRoom?>
-    var roomListEntries = MutableStateFlow<List<RoomListEntry>>(ArrayList())
-    val slidingSyncRoomsMap = HashMap<String, SlidingSyncRoom>()
 
-    val roomSummaries = MutableStateFlow(listOf<RoomListRoomSummary>())
-    val roomListSummaries = mutableListOf<RoomListRoomSummary>()
-
-    private var sessionDataFlow = MutableStateFlow<Session?>(null)
+    var sessionDataFlow = MutableStateFlow<Session?>(null)
     var syncPacketCount: Int = 0
-
-    private val slidingSyncListCoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io)
-    private val slidingSyncState = MutableStateFlow(SlidingSyncState.NOT_LOADED)
 
     private fun slidingSync(): SlidingSync {
         return slidingSyncJobManager.slidingSync
     }
 
-    @Composable
-    fun rememberGetRoomSummaries() = remember {
-        roomListSummaries
-    }
-
     private val slidingSyncListRoomListObserver = object : SlidingSyncListRoomListObserver {
 
         private fun handleRoomListEntry(entry: RoomListEntry, action: (roomId: String?) -> Unit) {
-            when(entry) {
+            when (entry) {
                 RoomListEntry.Empty -> action(null)
                 is RoomListEntry.Filled -> action(entry.roomId)
                 is RoomListEntry.Invalidated -> action(entry.roomId)
             }
         }
 
-        fun RoomListEntry.getRoomId(): String? = when(this) {
-                RoomListEntry.Empty -> null
-                is RoomListEntry.Filled -> this.roomId
-                is RoomListEntry.Invalidated -> this.roomId
+        fun RoomListEntry.getRoomId(): String? = when (this) {
+            RoomListEntry.Empty -> null
+            is RoomListEntry.Filled -> this.roomId
+            is RoomListEntry.Invalidated -> this.roomId
         }
 
         override fun didReceiveUpdate(diff: SlidingSyncListRoomsListDiff) {
             println("SlidingSyncListRoomsListDiff update $diff")
-            when(diff){
+            when (diff) {
                 is SlidingSyncListRoomsListDiff.Append -> {
-                    for(roomDiff in diff.values) {
+                    for (roomDiff in diff.values) {
                         handleRoomListEntry(roomDiff) { roomId ->
                             slidingSyncRoomManager.pushBack(roomId!!)
                         }
@@ -374,10 +500,6 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
         }
     }
 
-    fun roomList(): SharedFlow<List<RoomListRoomSummary>> {
-        return roomSummaries.asSharedFlow()
-    }
-
     val slidingSyncStateObserver = object : SlidingSyncListStateObserver {
         override fun didReceiveUpdate(newState: SlidingSyncState) {
             slidingSyncState.value = newState
@@ -388,7 +510,10 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
     suspend fun restoreSession(authService: AuthenticationService, session: Session) {
         withContext(Dispatchers.IO) {
             runCatching {
-                client = authService.restoreWithAccessToken(token=session.accessToken, deviceId = session.deviceId)
+                client = authService.restoreWithAccessToken(
+                    token = session.accessToken,
+                    deviceId = session.deviceId
+                )
                 client.setDelegate(ClientErrorHandler())
                 slidingSyncJobManager = initSlidingSync()
             }.onSuccess {
@@ -424,7 +549,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
         }
     }
 
-    private fun initSlidingSync() : SlidingSyncJobManager {
+    private fun initSlidingSync(): SlidingSyncJobManager {
         val slidingSyncFilters =
             SlidingSyncRequestListFilters(
                 isDm = null,
@@ -449,7 +574,6 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             )
             .filters(slidingSyncFilters)
             .name(name = "CurrentlyVisibleRooms")
-            .sendUpdatesForItems(true)
             .syncMode(mode = SlidingSyncMode.SELECTIVE)
             .addRange(0u, 20u)
             .use {
@@ -464,7 +588,6 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             .slidingSync()
             .homeserver("https://slidingsync.lab.matrix.org")
             .withCommonExtensions()
-            .coldCache("radiator")
             .addList(slidingSyncList)
             .use {
                 it.build()
