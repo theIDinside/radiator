@@ -5,8 +5,6 @@ import com.app.radiator.*
 import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.RoomSummary
 import com.app.radiator.ui.components.avatarData
-import kotlinx.collections.immutable.ImmutableCollection
-import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -137,14 +135,10 @@ interface SlidingSyncRoomManager : Disposable {
     fun reset(roomIds: List<RoomId>)
 
     fun getRoomSummary(roomId: String): RoomSummary
-    fun getRoomWithIndexSummary(index: Int): RoomSummary
-
-    fun getSummariesByIndex(indices: List<Int>): List<RoomSummary>
     fun getSummariesOf(indices: List<RoomId>): List<RoomSummary>
     fun getAllSummaries(): List<RoomSummary>
 
     fun getSlidingSyncRoom(roomId: String): SlidingSyncRoom
-    fun initializeRoom(roomId: String)
 
     fun getTimelineState(roomId: String): TimelineState
 }
@@ -194,21 +188,14 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
     val slidingSyncRoomManager = object : SlidingSyncRoomManager {
         val slidingSyncRoomsMap = HashMap<String, SlidingSyncRoom>()
         val slidingSyncRoomList = ArrayList<RoomId>()
-        val timelineStates = HashMap<String, TimelineState>()
 
         private fun list() = slidingSyncRoomList
 
         override fun destroy() {
-            /*
             slidingSyncRoomsMap.values.forEach {
                 it.destroy()
             }
             slidingSyncRoomsMap.clear()
-            slidingSyncRoomsIdMap.clear()
-            slidingSyncRoomList.clear()
-            clientRoomId = -1
-
-             */
         }
 
         fun addNewMapping(roomId: String) {
@@ -306,26 +293,18 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
 
         override fun getSlidingSyncRoom(roomId: String): SlidingSyncRoom {
             var room = slidingSyncRoomsMap[roomId]
-            if(room == null) {
+            if (room == null) {
                 room = slidingSync().getRoom(roomId)!!
                 slidingSyncRoomsMap[roomId] = room
             }
             return room
         }
 
-        override fun initializeRoom(
-            roomId: String
-        ) {
-            this.timelineStates[roomId] = TimelineState(
-                slidingSyncRoomsMap[roomId]!!,
-                coroutineScope = slidingSyncListCoroutineScope,
-                diffApplyDispatcher = dispatchers.diffUpdateDispatcher
-            )
-        }
-
-        override fun getTimelineState(roomId: String) : TimelineState {
-            return this.timelineStates[roomId]!!
-        }
+        override fun getTimelineState(roomId: String): TimelineState = TimelineState(
+            slidingSyncRoomsMap[roomId]!!,
+            coroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
+            diffApplyDispatcher = dispatchers.diffUpdateDispatcher
+        )
 
         override fun getRoomSummary(roomId: String): RoomSummary {
             if (slidingSyncRoomsMap[roomId] == null) {
@@ -352,6 +331,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
                             null -> TODO()
                         }
                     }
+
                     is TimelineItemContentKind.ProfileChange -> "profile change by foo"
                     is TimelineItemContentKind.RedactedMessage -> kind.toString()
                     is TimelineItemContentKind.RoomMembership -> "${kind.userId} changed user id"
@@ -373,14 +353,6 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             )
         }
 
-        override fun getRoomWithIndexSummary(index: Int): RoomSummary {
-            val roomId = list()[index]
-            return getRoomSummary(roomId)
-        }
-
-        override fun getSummariesByIndex(indices: List<Int>): List<RoomSummary> =
-            indices.map { getRoomWithIndexSummary(it) }.toList()
-
         override fun getSummariesOf(rooms: List<RoomId>): List<RoomSummary> =
             rooms.map { getRoomSummary(it) }.toList()
 
@@ -389,10 +361,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
     }
 
     val slidingSyncListener = object : SummaryFlow {
-
-        private val coroutineScope: CoroutineScope = SystemInterface.appCoroutineScope()
         var eventListener: () -> Unit = {}
-        private val extraBufferCapacity: Int = 128
         private val roomMap = RoomSummaryMap()
         private val summaryEmitter =
             MutableStateFlow<List<RoomSummary>>(emptyList())
@@ -411,8 +380,9 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             // N.B. summary emitter blocks this coroutine until _all_ subscribers have been notified.
             slidingSyncListCoroutineScope.launch {
                 withContext(dispatchers.io) {
-                    val summaries = summary.rooms.map { slidingSyncRoomManager.getRoomSummary(it) }.toList()
-                    for(room in summaries) {
+                    val summaries =
+                        summary.rooms.map { slidingSyncRoomManager.getRoomSummary(it) }.toList()
+                    for (room in summaries) {
                         roomMap[room.roomId] = room
                     }
                     summaryEmitter.value = roomMap.values.toImmutableList()
@@ -459,38 +429,47 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
                         }
                     }
                 }
+
                 SlidingSyncListRoomsListDiff.Clear -> {
                     slidingSyncRoomManager.clear()
                 }
+
                 is SlidingSyncListRoomsListDiff.Insert -> {
                     handleRoomListEntry(diff.value) { roomId ->
                         slidingSyncRoomManager.insert(diff.index.toInt(), roomId!!)
                     }
                 }
+
                 SlidingSyncListRoomsListDiff.PopBack -> {
                     slidingSyncRoomManager.popBack()
                 }
+
                 SlidingSyncListRoomsListDiff.PopFront -> {
                     slidingSyncRoomManager.popFront()
                 }
+
                 is SlidingSyncListRoomsListDiff.PushBack -> {
                     handleRoomListEntry(diff.value) { roomId ->
                         slidingSyncRoomManager.pushBack(roomId!!)
                     }
                 }
+
                 is SlidingSyncListRoomsListDiff.PushFront -> {
                     handleRoomListEntry(diff.value) { roomId ->
                         slidingSyncRoomManager.pushFront(roomId!!)
                     }
                 }
+
                 is SlidingSyncListRoomsListDiff.Remove -> {
                     slidingSyncRoomManager.removeRoomAtIndex(diff.index.toInt())
                 }
+
                 is SlidingSyncListRoomsListDiff.Reset -> {
                     slidingSyncRoomManager.reset(diff.values.mapNotNull {
                         it.getRoomId()
                     }.toList())
                 }
+
                 is SlidingSyncListRoomsListDiff.Set -> {
                     handleRoomListEntry(diff.value) { roomId ->
                         slidingSyncRoomManager.set(diff.index.toInt(), roomId!!)
@@ -517,7 +496,6 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
                 client.setDelegate(ClientErrorHandler())
                 slidingSyncJobManager = initSlidingSync()
             }.onSuccess {
-                println("Logged in...")
                 val session = client.session()
                 saveSerializedSession(session)
                 sessionDataFlow.value = session
@@ -550,6 +528,8 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
     }
 
     private fun initSlidingSync(): SlidingSyncJobManager {
+        if (::slidingSyncJobManager.isInitialized)
+            return slidingSyncJobManager
         val slidingSyncFilters =
             SlidingSyncRequestListFilters(
                 isDm = null,
@@ -588,6 +568,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
             .slidingSync()
             .homeserver("https://slidingsync.lab.matrix.org")
             .withCommonExtensions()
+            .storageKey("syncStorage")
             .addList(slidingSyncList)
             .use {
                 it.build()

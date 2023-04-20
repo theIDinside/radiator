@@ -1,12 +1,16 @@
 package com.app.radiator
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -18,7 +22,6 @@ import com.app.radiator.ui.theme.RadiatorTheme
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.*
 import org.matrix.rustcomponents.sdk.*
-import kotlin.io.path.exists
 
 class ClientErrorHandler : ClientDelegate {
     override fun didReceiveAuthError(isSoftLogout: Boolean) {
@@ -59,55 +62,33 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
                     val coroutineScope = rememberCoroutineScope()
+                    val isLoggedIn = matrixClient.isLoggedIn().collectAsState(initial = false)
                     NavHost(navController = navController, startDestination = Routes.Login.route) {
                         composable(Routes.Login.route) {
-                            if(matrixClient.hadSession) {
-                                navController.navigate(route = Routes.RoomList.route)
-                            } else {
-                                val isLoggedIn = matrixClient.isLoggedIn().collectAsState(initial = false)
-                                val onLoginClick = { userId: String, password: String ->
-                                    if (!isLoggedIn.value) {
-                                        val authenticationService = AuthenticationService(
-                                            SystemInterface.applicationDataDir(),
-                                            null,
-                                            null
-                                        )
-                                        val path = SystemInterface.getApplicationFilePath("session")
-                                        if (path.exists()) {
-                                            val session = deserializeSession()
-                                            if (session != null) {
-                                                coroutineScope.launch {
-                                                    try {
-                                                        authenticationService.configureHomeserver(
-                                                            homeServer
-                                                        )
-                                                    } catch (e: AuthenticationException) {
-                                                        authenticationService.configureHomeserver(
-                                                            session.slidingSyncProxy!!
-                                                        )
-                                                    }
-                                                    matrixClient.restoreSession(
-                                                        authService = authenticationService,
-                                                        session = session
-                                                    )
-                                                }
-                                            }
-                                            navController.navigate(route = Routes.RoomList.route)
-                                        } else {
-                                            coroutineScope.launch {
-                                                authenticationService.configureHomeserver("matrix.org")
-                                                matrixClient.login(
-                                                    authService = authenticationService,
-                                                    userName = userId,
-                                                    password = password
-                                                )
-                                            }
-                                            navController.navigate(route = Routes.RoomList.route)
-                                        }
-                                    }
+                            LaunchedEffect(isLoggedIn) {
+                                if (matrixClient.hadSession) {
+                                    navController.navigate(route = Routes.RoomList.route)
                                 }
-                                LoginScreen(onLogin = onLoginClick)
                             }
+                            val onLoginClick = { userId: String, password: String ->
+                                if (!isLoggedIn.value) {
+                                    val authenticationService = AuthenticationService(
+                                        SystemInterface.applicationDataDir(),
+                                        null,
+                                        null
+                                    )
+                                    coroutineScope.launch {
+                                        authenticationService.configureHomeserver("matrix.org")
+                                        matrixClient.login(
+                                            authService = authenticationService,
+                                            userName = userId,
+                                            password = password
+                                        )
+                                    }
+                                    navController.navigate(route = Routes.RoomList.route)
+                                }
+                            }
+                            LoginScreen(onLogin = onLoginClick)
                         }
 
                         composable(Routes.RoomList.route) {
@@ -116,27 +97,37 @@ class MainActivity : ComponentActivity() {
                                 .collectAsState(initial = emptyList())
 
                             if (rooms.value.isNotEmpty()) {
-                                RoomList(navController = navController, roomList = rooms.value.toImmutableList(), onClick = { summary ->
-                                    println("Navigate to Room [${summary.roomId}]: ${summary.name}")
-                                    matrixClient.slidingSyncRoomManager.initializeRoom(summary.roomId)
-                                    navController.navigate(Routes.Room.route + "/${summary.roomId}" )
-                                })
+                                RoomList(
+                                    navController = navController,
+                                    roomList = rooms.value.toImmutableList(),
+                                    onClick = { summary ->
+                                        navController.navigate(Routes.Room.route + "/${summary.roomId}")
+                                    })
                             } else {
                                 Text("We don't have any summaries :(")
                             }
                         }
                         composable(Routes.Room.route + "/{roomId}") { navBackStackEntry ->
-                            println("--- room route composed --- ")
                             val roomId = navBackStackEntry.arguments?.getString("roomId")
-                            val timelineState = remember { matrixClient.slidingSyncRoomManager.getTimelineState(roomId!!) }
-                            val timeline = timelineState.currentStateFlow.collectAsState(emptyList())
+                            val timelineState = remember {
+                                matrixClient.slidingSyncRoomManager.getTimelineState(roomId!!)
+                            }
+                            val timeline =
+                                timelineState.currentStateFlow.collectAsState(emptyList())
                             val isInit = timelineState.isInit().collectAsState(initial = false)
-                            if(isInit.value) {
-                                RoomRoute(messages=timeline.value, requestMore = {
+                            if (isInit.value) {
+                                RoomRoute(messages = timeline.value, requestMore = {
                                     coroutineScope.launch {
                                         timelineState.requestMore()
                                     }
                                 })
+                            }
+
+                            // Destroy the timeline handle and all the resources it's holding on to (on the SDK side)
+                            DisposableEffect(Unit) {
+                                onDispose {
+                                    timelineState.dispose()
+                                }
                             }
                         }
                     }

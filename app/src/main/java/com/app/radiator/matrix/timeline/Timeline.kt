@@ -1,8 +1,10 @@
 package com.app.radiator.matrix.timeline
 
+import android.util.Log
 import androidx.compose.runtime.*
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,7 +40,7 @@ interface ProfileDetails {
     object Unavailable : ProfileDetails
 }
 
-fun FFIProfileDetails.marshall(): ProfileDetails {
+fun FFIProfileDetails.marshal(): ProfileDetails {
     return when (this) {
         is FFIProfileDetails.Error -> ProfileDetails.Error(message = message)
         is FFIProfileDetails.Ready -> ProfileDetails.Ready(
@@ -60,13 +62,13 @@ interface RepliedToEventDetails {
     object Unavailable : RepliedToEventDetails
 }
 
-fun FFIRepliedToEventDetails.marshall(): RepliedToEventDetails {
+fun FFIRepliedToEventDetails.marshal(): RepliedToEventDetails {
     return when (this) {
         is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Error -> RepliedToEventDetails.Error(
             message
         )
         is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Ready -> RepliedToEventDetails.Ready(
-            message = message.marshall(), sender = sender, senderProfile = senderProfile.marshall()
+            message = message.use { it.marshal() }, sender = sender, senderProfile = senderProfile.marshal()
         )
         org.matrix.rustcomponents.sdk.RepliedToEventDetails.Unavailable -> RepliedToEventDetails.Unavailable
         org.matrix.rustcomponents.sdk.RepliedToEventDetails.Pending -> RepliedToEventDetails.Pending
@@ -75,8 +77,8 @@ fun FFIRepliedToEventDetails.marshall(): RepliedToEventDetails {
 
 data class InReplyToDetails(val event: RepliedToEventDetails, val eventId: String)
 
-fun FFIInReplyToDetails.marshall(): InReplyToDetails =
-    InReplyToDetails(event = event.marshall(), eventId = eventId)
+fun FFIInReplyToDetails.marshal(): InReplyToDetails =
+    InReplyToDetails(event = event.marshal(), eventId = eventId)
 
 interface EventSendState {
     object NotSendYet : EventSendState
@@ -127,7 +129,7 @@ interface OtherState {
     object SpaceParent : OtherState
 }
 
-fun FFIOtherState.marshall(): OtherState {
+fun FFIOtherState.marshal(): OtherState {
     return when (this) {
         is FFIOtherState.Custom -> OtherState.Custom(this.eventType)
         is FFIOtherState.RoomAvatar -> OtherState.RoomAvatar(this.url)
@@ -183,7 +185,7 @@ data class ThumbnailInfo(
 )
 */
 
-fun org.matrix.rustcomponents.sdk.VideoInfo.marshall() = VideoInfo(
+fun org.matrix.rustcomponents.sdk.VideoInfo.marshal() = VideoInfo(
     duration = this.duration,
     height = this.height,
     width = this.width,
@@ -206,7 +208,7 @@ data class VideoInfo(
 )
 
 
-fun FFIImageInfo.marshall() = ImageInfo(
+fun FFIImageInfo.marshal() = ImageInfo(
     height = this.height,
     width = this.width,
     mimetype = this.mimetype,
@@ -226,7 +228,7 @@ data class ImageInfo(
     val blurhash: String?,
 )
 
-fun org.matrix.rustcomponents.sdk.FileInfo.marshall() = FileInfo(mimeType = this.mimetype,
+fun org.matrix.rustcomponents.sdk.FileInfo.marshal() = FileInfo(mimeType = this.mimetype,
     size = this.size,
     thumbnailInfo = this.thumbnailInfo?.copy(),
     thumbnailSource = this.thumbnailSource.use { it?.url() })
@@ -340,7 +342,7 @@ interface Message {
     object RedactedMessage : Message
 }
 
-// EventItems in the timeline that has been marshalled (copied) from the Rust SDK backend.
+// EventItems in the timeline that has been marshaled (copied) from the Rust SDK backend.
 
 @Immutable
 interface VirtualTimelineItem {
@@ -410,7 +412,7 @@ sealed interface TimelineItemVariant {
 }
 
 
-fun org.matrix.rustcomponents.sdk.EventSendState.marshall(): EventSendState = when (this) {
+fun org.matrix.rustcomponents.sdk.EventSendState.marshal(): EventSendState = when (this) {
     is org.matrix.rustcomponents.sdk.EventSendState.NotSendYet -> EventSendState.NotSendYet
     is org.matrix.rustcomponents.sdk.EventSendState.SendingFailed -> EventSendState.SendingFailed(
         this.error
@@ -418,7 +420,7 @@ fun org.matrix.rustcomponents.sdk.EventSendState.marshall(): EventSendState = wh
     is org.matrix.rustcomponents.sdk.EventSendState.Sent -> EventSendState.Sent(this.eventId)
 }
 
-private fun EventTimelineItem.marshall(lastUserSeen: String?): TimelineItemVariant.Event {
+private fun EventTimelineItem.marshal(lastUserSeen: String?): TimelineItemVariant.Event {
     val sender = this.sender()
     val continuous = lastUserSeen?.equals(sender) ?: false
     return TimelineItemVariant.Event(
@@ -429,62 +431,62 @@ private fun EventTimelineItem.marshall(lastUserSeen: String?): TimelineItemVaria
         isLocal = this.isLocal(),
         isOwn = this.isOwn(),
         isRemote = this.isRemote(),
-        localSendState = this.localSendState()?.marshall(),
+        localSendState = this.localSendState()?.marshal(),
         reactions = this.reactions()?.map { Reaction(it.key, it.count) }.orEmpty(),
         sender = sender,
-        senderProfile = this.senderProfile().marshall(),
+        senderProfile = this.senderProfile().marshal(),
         timestamp = this.timestamp(),
-        message = this.content().use { it.marshall() },
+        message = this.content().use { it.marshal() },
         groupedByUser = continuous
     )
 }
 
-fun FFIMessage.marshall(): Message {
+fun FFIMessage.marshal(): Message {
     return when (val msgType = msgtype()!!) {
         is MessageType.Audio -> Message.Audio(
             body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             info = msgType.content.info,
-            source = msgType.content.source.url()
+            source = msgType.content.source.use { it.url() }
         )
         is MessageType.Emote -> Message.Emote(
             body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
         is MessageType.File -> Message.File(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
-            info = msgType.content.info?.marshall(),
+            info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
         is MessageType.Image -> Message.Image(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
-            info = msgType.content.info?.marshall(),
+            info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
         is MessageType.Notice -> Message.Notice(
             body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
         is MessageType.Text -> Message.Text(
             body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
         is MessageType.Video -> Message.Video(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshall() },
+            inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
-            info = msgType.content.info?.marshall(),
+            info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
     }
 }
 
-private fun TimelineItemContent.marshall(): Message {
+private fun TimelineItemContent.marshal(): Message {
     return when (val kind = this.kind()) {
         is TimelineItemContentKind.FailedToParseMessageLike -> Message.FailedToParseMessageLike(
             eventType = kind.eventType, error = kind.error
@@ -502,19 +504,21 @@ private fun TimelineItemContent.marshall(): Message {
             userId = kind.userId, change = kind.change
         )
         is TimelineItemContentKind.State -> Message.State(
-            stateKey = kind.stateKey, content = kind.content.marshall()
+            stateKey = kind.stateKey, content = kind.content.marshal()
         )
         is TimelineItemContentKind.Sticker -> Message.Sticker(
-            body = kind.body, info = kind.info.marshall(), url = kind.url
+            body = kind.body, info = kind.info.marshal(), url = kind.url
         )
         is TimelineItemContentKind.UnableToDecrypt -> Message.UnableToDecrypt(msg = kind.msg)
         TimelineItemContentKind.Message -> {
             val message = this.asMessage()!!
-            return message.marshall()
+            return message.marshal()
         }
         TimelineItemContentKind.RedactedMessage -> Message.RedactedMessage
     }
 }
+
+data class CanRequestMoreState(val hasMore: Boolean, val isLoading: Boolean)
 
 /**
  * Is responsible for subscribing as a listener to SlidingSyncRoom's `onUpdate`.
@@ -531,10 +535,11 @@ class TimelineState(
     private val isInitialized = initialized.asStateFlow()
     private val timelineItems: MutableStateFlow<List<TimelineItemVariant>> =
         MutableStateFlow(emptyList())
-    val mutex = Mutex()
+    private val mutex = Mutex()
     val currentStateFlow = timelineItems.asStateFlow()
     private lateinit var taskHandle: TaskHandle
-    var userIdToTimelineId: HashMap<String, Long> = HashMap()
+    private val timelineStateRange =
+        MutableStateFlow(CanRequestMoreState(hasMore = true, isLoading = false))
 
     init {
         val roomSubscription =
@@ -544,7 +549,10 @@ class TimelineState(
         var senderId: String? = null
         coroutineScope.launch {
             mutex.withLock {
-                val result = slidingSyncRoom.subscribeAndAddTimelineListener(this@TimelineState, roomSubscription)
+                val result = slidingSyncRoom.subscribeAndAddTimelineListener(
+                    this@TimelineState,
+                    roomSubscription
+                )
                 val initList = result.items.map { ti ->
                     val item = takeMap(ti, lastUserSeen = senderId)
                     senderId = item.sender()
@@ -562,7 +570,6 @@ class TimelineState(
     }
 
     override fun onUpdate(update: TimelineDiff) {
-        println("Timeline update")
         coroutineScope.launch {
             withContext(diffApplyDispatcher) {
                 mutex.withLock {
@@ -574,8 +581,8 @@ class TimelineState(
                 }
             }
             when (val firstItem = timelineItems.value.firstOrNull()) {
-                is TimelineItemVariant.Virtual -> updateBackPaginationState(firstItem.virtual)
-                else -> updateBackPaginationState(null)
+                is TimelineItemVariant.Virtual -> updateCanRequestMoreState(firstItem.virtual)
+                else -> updateCanRequestMoreState(null)
             }
         }
     }
@@ -587,8 +594,21 @@ class TimelineState(
         }
     }
 
-    private fun updateBackPaginationState(virtualItem: VirtualTimelineItem?) {
-        println("TODO: Update Pagination. You need to retrieve more elements")
+    /// Updates
+    private fun updateCanRequestMoreState(virtualItem: VirtualTimelineItem?) {
+        val currentState = this.timelineStateRange.value
+        val newState = when (virtualItem) {
+            VirtualTimelineItem.TimelineStart -> currentState.copy(
+                hasMore = false,
+                isLoading = false
+            )
+            VirtualTimelineItem.LoadingIndicator -> currentState.copy(
+                hasMore = true,
+                isLoading = true
+            )
+            else -> currentState.copy(hasMore = true, isLoading = false)
+        }
+        this.timelineStateRange.value = newState
     }
 
     private suspend fun updateTimelineItems(block: MutableList<TimelineItemVariant>.() -> Unit) {
@@ -602,7 +622,7 @@ class TimelineState(
         lastUserSeen: String?,
     ): TimelineItemVariant = item.use {
 
-        it.asEvent()?.marshall(lastUserSeen)?.let { i -> return i }
+        it.asEvent()?.marshal(lastUserSeen)?.let { i -> return i }
 
         it.asVirtual()?.let { asVirtual ->
             val id = (0..Int.MAX_VALUE).random()
@@ -678,5 +698,11 @@ class TimelineState(
                 })
             }
         }
+    }
+
+    fun dispose() {
+        Log.d("Timeline", "Disposing of timeline")
+        coroutineScope.cancel()
+        taskHandle.use { it.cancel() }
     }
 }
