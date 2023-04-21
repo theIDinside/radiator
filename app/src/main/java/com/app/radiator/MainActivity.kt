@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.app.radiator.matrix.*
+import com.app.radiator.ui.components.LoadingAnimation
 import com.app.radiator.ui.routes.LoginScreen
 import com.app.radiator.ui.routes.RoomList
 import com.app.radiator.ui.routes.RoomRoute
@@ -57,25 +55,22 @@ class MainActivity : ComponentActivity() {
             RadiatorTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background
                 ) {
                     val navController = rememberNavController()
                     val coroutineScope = rememberCoroutineScope()
                     val isLoggedIn = matrixClient.isLoggedIn().collectAsState(initial = false)
                     NavHost(navController = navController, startDestination = Routes.Login.route) {
                         composable(Routes.Login.route) {
-                            LaunchedEffect(isLoggedIn) {
-                                if (matrixClient.hadSession) {
+                            LaunchedEffect(isLoggedIn.value) {
+                                if (isLoggedIn.value) {
                                     navController.navigate(route = Routes.RoomList.route)
                                 }
                             }
                             val onLoginClick = { userId: String, password: String ->
                                 if (!isLoggedIn.value) {
                                     val authenticationService = AuthenticationService(
-                                        SystemInterface.applicationDataDir(),
-                                        null,
-                                        null
+                                        SystemInterface.applicationDataDir(), null, null
                                     )
                                     coroutineScope.launch {
                                         authenticationService.configureHomeserver("matrix.org")
@@ -97,8 +92,7 @@ class MainActivity : ComponentActivity() {
                                 .collectAsState(initial = emptyList())
 
                             if (rooms.value.isNotEmpty()) {
-                                RoomList(
-                                    navController = navController,
+                                RoomList(navController = navController,
                                     roomList = rooms.value.toImmutableList(),
                                     onClick = { summary ->
                                         navController.navigate(Routes.Room.route + "/${summary.roomId}")
@@ -112,17 +106,12 @@ class MainActivity : ComponentActivity() {
                             val timelineState = remember {
                                 matrixClient.slidingSyncRoomManager.getTimelineState(roomId!!)
                             }
-                            val timeline =
-                                timelineState.currentStateFlow.collectAsState(emptyList())
-                            val isInit = timelineState.isInit().collectAsState(initial = false)
+                            val isInit = remember { timelineState.isInit() }.collectAsState(initial = false)
                             if (isInit.value) {
-                                RoomRoute(messages = timeline.value, requestMore = {
-                                    coroutineScope.launch {
-                                        timelineState.requestMore()
-                                    }
-                                })
+                                RoomRoute(timelineState = timelineState)
+                            } else {
+                                LoadingAnimation()
                             }
-
                             // Destroy the timeline handle and all the resources it's holding on to (on the SDK side)
                             DisposableEffect(Unit) {
                                 onDispose {

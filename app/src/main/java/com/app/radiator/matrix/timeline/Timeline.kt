@@ -2,11 +2,15 @@ package com.app.radiator.matrix.timeline
 
 import android.util.Log
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.ImageBitmap
+import com.app.radiator.matrix.store.MediaMxcURI
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -44,10 +48,11 @@ fun FFIProfileDetails.marshal(): ProfileDetails {
     return when (this) {
         is FFIProfileDetails.Error -> ProfileDetails.Error(message = message)
         is FFIProfileDetails.Ready -> ProfileDetails.Ready(
-            avatarUrl = avatarUrl,
+            avatarUrl = this.avatarUrl,
             displayName = displayName,
             displayNameAmbiguous = displayNameAmbiguous
         )
+
         FFIProfileDetails.Pending -> ProfileDetails.Pending
         FFIProfileDetails.Unavailable -> ProfileDetails.Unavailable
     }
@@ -67,9 +72,13 @@ fun FFIRepliedToEventDetails.marshal(): RepliedToEventDetails {
         is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Error -> RepliedToEventDetails.Error(
             message
         )
+
         is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Ready -> RepliedToEventDetails.Ready(
-            message = message.use { it.marshal() }, sender = sender, senderProfile = senderProfile.marshal()
+            message = message.use { it.marshal() },
+            sender = sender,
+            senderProfile = senderProfile.marshal()
         )
+
         org.matrix.rustcomponents.sdk.RepliedToEventDetails.Unavailable -> RepliedToEventDetails.Unavailable
         org.matrix.rustcomponents.sdk.RepliedToEventDetails.Pending -> RepliedToEventDetails.Pending
     }
@@ -87,7 +96,7 @@ interface EventSendState {
 }
 
 interface OtherState {
-    data class Custom(val eventType: kotlin.String) : OtherState
+    data class Custom(val eventType: String) : OtherState
     object PolicyRuleRoom : OtherState
 
     object PolicyRuleServer : OtherState
@@ -137,6 +146,7 @@ fun FFIOtherState.marshal(): OtherState {
         is FFIOtherState.RoomThirdPartyInvite -> OtherState.RoomThirdPartyInvite(
             this.displayName
         )
+
         is FFIOtherState.RoomTopic -> OtherState.RoomTopic(this.topic)
         FFIOtherState.PolicyRuleRoom -> OtherState.PolicyRuleRoom
         FFIOtherState.PolicyRuleServer -> OtherState.PolicyRuleServer
@@ -417,6 +427,7 @@ fun org.matrix.rustcomponents.sdk.EventSendState.marshal(): EventSendState = whe
     is org.matrix.rustcomponents.sdk.EventSendState.SendingFailed -> EventSendState.SendingFailed(
         this.error
     )
+
     is org.matrix.rustcomponents.sdk.EventSendState.Sent -> EventSendState.Sent(this.eventId)
 }
 
@@ -443,41 +454,45 @@ private fun EventTimelineItem.marshal(lastUserSeen: String?): TimelineItemVarian
 
 fun FFIMessage.marshal(): Message {
     return when (val msgType = msgtype()!!) {
-        is MessageType.Audio -> Message.Audio(
-            body = body(),
+        is MessageType.Audio -> Message.Audio(body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             info = msgType.content.info,
-            source = msgType.content.source.use { it.url() }
-        )
+            source = msgType.content.source.use { it.url() })
+
         is MessageType.Emote -> Message.Emote(
             body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
+
         is MessageType.File -> Message.File(body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
+
         is MessageType.Image -> Message.Image(body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
+
         is MessageType.Notice -> Message.Notice(
             body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
+
         is MessageType.Text -> Message.Text(
             body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
+
         is MessageType.Video -> Message.Video(body = body(),
             inReplyTo = inReplyTo()?.use { it.marshal() },
             isEdited = isEdited(),
@@ -491,29 +506,36 @@ private fun TimelineItemContent.marshal(): Message {
         is TimelineItemContentKind.FailedToParseMessageLike -> Message.FailedToParseMessageLike(
             eventType = kind.eventType, error = kind.error
         )
+
         is TimelineItemContentKind.FailedToParseState -> Message.FailedToParseState(
             eventType = kind.eventType, error = kind.error, stateKey = kind.stateKey
         )
+
         is TimelineItemContentKind.ProfileChange -> Message.ProfileChange(
             displayName = kind.displayName,
             prevDisplayName = kind.prevDisplayName,
             avatarUrl = kind.avatarUrl,
             prevAvatarUrl = kind.prevAvatarUrl
         )
+
         is TimelineItemContentKind.RoomMembership -> Message.RoomMembership(
             userId = kind.userId, change = kind.change
         )
+
         is TimelineItemContentKind.State -> Message.State(
             stateKey = kind.stateKey, content = kind.content.marshal()
         )
+
         is TimelineItemContentKind.Sticker -> Message.Sticker(
             body = kind.body, info = kind.info.marshal(), url = kind.url
         )
+
         is TimelineItemContentKind.UnableToDecrypt -> Message.UnableToDecrypt(msg = kind.msg)
         TimelineItemContentKind.Message -> {
             val message = this.asMessage()!!
             return message.marshal()
         }
+
         TimelineItemContentKind.RedactedMessage -> Message.RedactedMessage
     }
 }
@@ -540,28 +562,24 @@ class TimelineState(
     private lateinit var taskHandle: TaskHandle
     private val timelineStateRange =
         MutableStateFlow(CanRequestMoreState(hasMore = true, isLoading = false))
+    val avatarUrls = HashMap<String, MediaMxcURI?>()
 
     init {
         val roomSubscription =
             RoomSubscription(timelineLimit = null, requiredState = listOf(RequiredState("*", "*")))
-        slidingSyncRoom.fullRoom()?.use { it.fetchMembers() }
-
         var senderId: String? = null
         coroutineScope.launch {
-            mutex.withLock {
-                val result = slidingSyncRoom.subscribeAndAddTimelineListener(
-                    this@TimelineState,
-                    roomSubscription
-                )
-                val initList = result.items.map { ti ->
-                    val item = takeMap(ti, lastUserSeen = senderId)
-                    senderId = item.sender()
-                    item
-                }.toList()
-                timelineItems.value = initList
-                taskHandle = result.taskHandle
-                initialized.value = true
-            }
+            val result = slidingSyncRoom.subscribeAndAddTimelineListener(
+                this@TimelineState, roomSubscription
+            )
+            val initList = result.items.map { ti ->
+                val item = takeMap(ti, lastUserSeen = senderId)
+                senderId = item.sender()
+                item
+            }.toList()
+            timelineItems.value = initList
+            taskHandle = result.taskHandle
+            initialized.value = true
         }
     }
 
@@ -587,9 +605,10 @@ class TimelineState(
         }
     }
 
-    suspend fun requestMore() {
-        withContext(this.diffApplyDispatcher) {
-            val options = PaginationOptions.UntilNumItems(5u, 2u)
+    fun requestMore() {
+        this.coroutineScope.launch(this.diffApplyDispatcher) {
+            Log.i("Timeline", "requestMore")
+            val options = PaginationOptions.UntilNumItems(5u, 5u)
             slidingSyncRoom.fullRoom()?.paginateBackwards(options)
         }
     }
@@ -599,13 +618,13 @@ class TimelineState(
         val currentState = this.timelineStateRange.value
         val newState = when (virtualItem) {
             VirtualTimelineItem.TimelineStart -> currentState.copy(
-                hasMore = false,
-                isLoading = false
+                hasMore = false, isLoading = false
             )
+
             VirtualTimelineItem.LoadingIndicator -> currentState.copy(
-                hasMore = true,
-                isLoading = true
+                hasMore = true, isLoading = true
             )
+
             else -> currentState.copy(hasMore = true, isLoading = false)
         }
         this.timelineStateRange.value = newState
@@ -630,12 +649,15 @@ class TimelineState(
                 is org.matrix.rustcomponents.sdk.VirtualTimelineItem.DayDivider -> TimelineItemVariant.Virtual(
                     id, VirtualTimelineItem.DayDivider(asVirtual.ts)
                 )
+
                 org.matrix.rustcomponents.sdk.VirtualTimelineItem.LoadingIndicator -> TimelineItemVariant.Virtual(
                     id, VirtualTimelineItem.LoadingIndicator
                 )
+
                 org.matrix.rustcomponents.sdk.VirtualTimelineItem.ReadMarker -> TimelineItemVariant.Virtual(
                     id, VirtualTimelineItem.ReadMarker
                 )
+
                 org.matrix.rustcomponents.sdk.VirtualTimelineItem.TimelineStart -> TimelineItemVariant.Virtual(
                     id, VirtualTimelineItem.TimelineStart
                 )
@@ -652,10 +674,12 @@ class TimelineState(
                     diff.append()?.map { takeMap(it, this.lastOrNull()?.sender()) }.orEmpty()
                 addAll(append)
             }
+
             TimelineChange.CLEAR -> clear()
             TimelineChange.INSERT -> diff.insert()?.use {
                 add(it.index.toInt(), takeMap(it.item, null))
             }
+
             TimelineChange.SET -> diff.set()?.use {
                 val idx = it.index.toInt()
                 set(idx, takeMap(it.item, this.getOrNull(idx - 1)?.sender()))
@@ -669,12 +693,15 @@ class TimelineState(
                     }
                 }
             }
+
             TimelineChange.REMOVE -> diff.remove()?.let {
                 removeAt(it.toInt())
             }
+
             TimelineChange.PUSH_BACK -> diff.pushBack()?.use {
                 add(takeMap(it, lastOrNull()?.sender()))
             }
+
             TimelineChange.PUSH_FRONT -> diff.pushFront()?.use {
                 val item = takeMap(it, null)
                 firstOrNull()?.let { first ->
@@ -684,10 +711,12 @@ class TimelineState(
                 }
                 add(0, item)
             }
+
             TimelineChange.POP_BACK -> removeLastOrNull()
             TimelineChange.POP_FRONT -> {
                 removeFirstOrNull()
             }
+
             TimelineChange.RESET -> diff.reset()?.let { items ->
                 clear()
                 var senderId: String? = null
@@ -702,7 +731,23 @@ class TimelineState(
 
     fun dispose() {
         Log.d("Timeline", "Disposing of timeline")
-        coroutineScope.cancel()
         taskHandle.use { it.cancel() }
+        coroutineScope.cancel()
+    }
+
+    fun sendMessage(msg: String) {
+        this.coroutineScope.launch(Dispatchers.IO) {
+            runCatching {
+                val id = genTransactionId()
+                val msgAsMarkdown = messageEventContentFromMarkdown(msg)
+                slidingSyncRoom.fullRoom()?.use {
+                    it.send(msgAsMarkdown, id)
+                }
+            }.onFailure {
+                Log.d("Timeline", "Send message fail")
+            }.onSuccess {
+                Log.i("Timeline", "Send message succeeded")
+            }
+        }
     }
 }

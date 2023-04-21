@@ -17,13 +17,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.app.radiator.matrix.timeline.UserTimelineMessage
 
 @Preview
 @Composable
 fun MessageComposer(
     modifier: Modifier = Modifier,
-    userTimelineMessage: UserTimelineMessage = UserTimelineMessage(),
     sendMessageOp: (String) -> Unit = { Log.w("MessageComposer", "Send message not implemented") },
 ) {
     val (messageInput, setMessage) = remember { mutableStateOf("") }

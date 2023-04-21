@@ -1,5 +1,6 @@
 package com.app.radiator.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,26 +29,6 @@ private val minHeight = 72.dp
 val AvatarGradientStart = Color(0x0F4CA1AF)
 val AvatarGradientEnd = Color(0xFFF000E5)
 
-@Composable
-private fun ImageAvatar(
-    avatarData: AvatarData,
-    modifier: Modifier = Modifier,
-) {
-    /*
-    AsyncImage(
-        model = avatarData,
-        onError = {
-            Timber.e("TAG", "Error $it\n${it.result}", it.result.throwable)
-        },
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        placeholder = debugPlaceholderAvatar(),
-        modifier = modifier
-    )
-
-     */
-}
-
 sealed class AvatarSize(open val dp: Dp) {
 
     object SMALL : AvatarSize(32.dp)
@@ -63,7 +44,7 @@ sealed class AvatarSize(open val dp: Dp) {
 data class AvatarData(
     val id: String,
     val name: String?,
-    val url: String? = null
+    val url: String? = null,
 ) {
     fun getInitial(): String {
         val firstChar = name?.firstOrNull() ?: id.getOrNull(1) ?: '?'
@@ -123,7 +104,7 @@ internal fun DefaultRoomSummaryRow(
             .height(IntrinsicSize.Min),
         verticalAlignment = CenterVertically
     ) {
-        Avatar(room.avatarData)
+        Avatar(avatarData = room.avatarData, avatarUrl = null)
         Column(
             modifier = Modifier
                 .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)

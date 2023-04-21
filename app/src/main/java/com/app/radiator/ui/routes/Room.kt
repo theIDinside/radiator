@@ -1,10 +1,26 @@
 package com.app.radiator.ui.routes
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -13,73 +29,128 @@ import com.app.radiator.matrix.timeline.VirtualTimelineItem
 import com.app.radiator.ui.components.AvatarData
 import com.app.radiator.ui.components.DayDivider
 import com.app.radiator.ui.components.RoomMessageItem
-import kotlinx.collections.immutable.ImmutableList
 import com.app.radiator.matrix.timeline.ProfileDetails
+import com.app.radiator.matrix.timeline.TimelineState
+import com.app.radiator.ui.components.MessageComposer
+import kotlinx.coroutines.launch
 import java.text.DateFormat
 
-fun ProfileDetails.avatarData(): AvatarData? {
+fun ProfileDetails.avatarData(userId: String): AvatarData? {
     when (this) {
         is ProfileDetails.Ready -> return AvatarData(
-            this.displayName!!,
-            this.displayName,
-            this.avatarUrl
+            id = userId, name = this.displayName, url = this.avatarUrl
         )
+
+        ProfileDetails.Pending -> TODO("Pending Profile details not handled yet")
         else -> return null
-        // ProfileTimelineDetails.Unavailable -> return
-        // ProfileTimelineDetails.Pending -> TODO()
     }
 }
 
 @Composable
 fun RoomRoute(
-    messages: List<TimelineItemVariant>,
-    requestMore: () -> Unit = { println("request more not implemented") },
+    timelineState: TimelineState
 ) {
     val lazyListState = rememberLazyListState()
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        state = lazyListState,
-        horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.Bottom,
-        reverseLayout = false
-    ) {
-        itemsIndexed(
-            items = messages,
-            contentType = { _, timelineItem -> timelineItem.contentType() },
-            key = { _, timelineItem -> timelineItem.id() },
-        ) { index, timelineItem ->
-            when (timelineItem) {
-                is TimelineItemVariant.Event -> {
-                    RoomMessageItem(
-                        item = timelineItem,
-                        avatarData = timelineItem.senderProfile.avatarData(),
-                        shouldGroup = timelineItem.groupedByUser
-                    )
-                }
-                is TimelineItemVariant.Virtual -> {
-                    Box() {
-                        Row(modifier = Modifier.fillMaxWidth(),horizontalArrangement = Arrangement.Center,verticalAlignment = Alignment.CenterVertically) {
-                            when (timelineItem.virtual) {
-                                is VirtualTimelineItem.DayDivider -> {
-                                    DayDivider(
-                                        DateFormat.getDateInstance()
-                                            .format(timelineItem.virtual.ts.toLong())
-                                    )
-                                }
-                                VirtualTimelineItem.LoadingIndicator -> {}
-                                VirtualTimelineItem.ReadMarker -> {}
-                                VirtualTimelineItem.TimelineStart -> {}
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-                TimelineItemVariant.Unknown -> TODO("Should never happen")
-            }
+    val coroutineScope = rememberCoroutineScope()
+    val messages = remember { timelineState.currentStateFlow }.collectAsState(emptyList())
 
-            if (index == messages.lastIndex) {
-                requestMore()
+    fun reachedTopOfList(index: Int): Boolean = index == 0
+
+    Box {
+        Scaffold(content = { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                state = lazyListState,
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.Bottom,
+                reverseLayout = false
+            ) {
+                itemsIndexed(
+                    items = messages.value,
+                    contentType = { _, timelineItem -> timelineItem.contentType() },
+                    key = { _, timelineItem -> timelineItem.id() },
+                ) { index, timelineItem ->
+                    when (timelineItem) {
+                        is TimelineItemVariant.Event -> {
+                            RoomMessageItem(
+                                item = timelineItem,
+                                avatarData = timelineItem.senderProfile.avatarData(timelineItem.sender),
+                                shouldGroup = timelineItem.groupedByUser,
+                                avatarUrls = timelineState.avatarUrls,
+                            )
+                        }
+                        is TimelineItemVariant.Virtual -> {
+                            Box() {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    when (timelineItem.virtual) {
+                                        is VirtualTimelineItem.DayDivider -> {
+                                            DayDivider(
+                                                DateFormat.getDateInstance()
+                                                    .format(timelineItem.virtual.ts.toLong())
+                                            )
+                                        }
+
+                                        VirtualTimelineItem.LoadingIndicator -> {
+                                            Log.i("RoomRoute", "Loading indicator seen")
+                                        }
+
+                                        VirtualTimelineItem.ReadMarker -> {}
+                                        VirtualTimelineItem.TimelineStart -> {}
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        TimelineItemVariant.Unknown -> TODO("Should never happen")
+                    }
+
+                    if (reachedTopOfList(index)) {
+                        timelineState.requestMore()
+                    }
+                }
+            }
+        }, bottomBar = {
+            MessageComposer(sendMessageOp = { it -> timelineState.sendMessage(it) })
+        },
+        floatingActionButton = {
+            // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
+            //  it means this composable will get a recomposition triggered _every time the user scrolls_
+            //  - I'm not willing to pay that cost, right now
+            FloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        lazyListState.animateScrollToItem(messages.value.size)
+                    }
+                },
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .size(40.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Icon(Icons.Default.KeyboardArrowDown, "")
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End)
+
+        // Auto-scroll when new timeline items appear
+        LaunchedEffect(messages.value) {
+            coroutineScope.launch {
+                if(lazyListState.isScrolledToTheEnd() && !lazyListState.isScrollInProgress) {
+                    lazyListState.animateScrollToItem(messages.value.size)
+                }
             }
         }
     }
 }
+
+// I have no idea why this is, but it seems as though, 2 is the magic number here; if we say 0, 1 or 2, this all goes to shit
+// we have to compare (less-than) against 3, to "be sure" that we're at the end. Seems lazy column isn't *exact* in it's measurements
+fun LazyListState.isScrolledToTheEnd() = (layoutInfo.totalItemsCount - (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0)) < 3

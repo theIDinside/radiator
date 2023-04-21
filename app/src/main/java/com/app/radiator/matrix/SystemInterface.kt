@@ -111,7 +111,6 @@ object SDKLogging {
 fun applicationSetup(app: Application) {
 
     SystemInterface.basePathFile = File(app.applicationContext.filesDir, "session")
-    SystemInterface.initialized = true
     SDKLogging.setLoggingFor(
         listOf(
             SDKModule.SlidingSync.level(SDKLogLevels.Trace),
@@ -119,4 +118,5 @@ fun applicationSetup(app: Application) {
         )
     )
     setupLogging()
+    SystemInterface.initialized = true
 }

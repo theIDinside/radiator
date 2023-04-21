@@ -1,30 +1,23 @@
 package com.app.radiator.ui.components
 
-import android.content.ClipData
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.LastBaseline
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.app.radiator.matrix.store.MediaMxcURI
 import com.app.radiator.matrix.timeline.*
 import com.app.radiator.matrix.timeline.displayName
 import java.util.*
@@ -104,6 +97,7 @@ fun DayDivider(date: String = "April 10, 2023") {
 @Composable
 fun RoomMessageItem(
     item: TimelineItemVariant.Event = preview,
+    avatarUrls: HashMap<String, MediaMxcURI?> = HashMap(),
     selected: Boolean = false,
     onClick: () -> Unit = {},
     onClickHold: () -> Unit = {},
@@ -134,7 +128,7 @@ fun RoomMessageItem(
                                 .offset(y = 2.dp)
                         if (avatarData != null) {
                             Column(modifier = innerModifier) {
-                                Avatar(avatarData, size = 25.dp)
+                                Avatar(avatarData=avatarData, size = 25.dp, avatarUrl=avatarUrls[avatarData.id])
                                 Spacer(modifier = Modifier.width(20.dp))
                             }
                         }
@@ -163,7 +157,7 @@ fun RoomMessageItem(
                             Text(contentTypeItem.body)
                         }
                         else -> {
-                            Text("Unknown")
+                            Text(contentTypeItem.toString())
                         }
                     }
                 }
