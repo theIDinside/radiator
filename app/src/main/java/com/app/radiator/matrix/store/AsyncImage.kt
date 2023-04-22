@@ -4,7 +4,6 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -15,15 +14,11 @@ import com.app.radiator.matrix.store.AsyncImageStorage.Cache.cachedBytes
 import com.app.radiator.matrix.store.AsyncImageStorage.Cache.loadedImages
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.URL
-import java.util.concurrent.locks.ReadWriteLock
 import kotlin.system.measureNanoTime
 
 data class MediaMxcURI(val url: String, val homeServer: String)
@@ -37,6 +32,9 @@ fun MediaMxcURI.toUrl(): URL {
     return URL(withQuery)
 }
 
+class AsyncLoadedImage(img: ImageBitmap? = null) {
+    var img = mutableStateOf(img)
+}
 
 /// N.B! We're basically assuming that a read, foo = loadedImages[id], can fail safely, if operations on map is being performed inside mutex
 /// or put in another way; that all read operations on loadedImages is safe, even with write operations going on. If not,
@@ -46,19 +44,15 @@ object AsyncImageStorage {
 
     object Cache {
         val cacheMutex = Mutex()
-        val loadedImages = HashMap<MediaMxcURI, ImageBitmap>()
+        val loadedImages = HashMap<MediaMxcURI, AsyncLoadedImage>()
         var cachedBytes = 0
     }
 
-    suspend fun clearCache() {
-        cacheMutex.withLock {
-            loadedImages.clear()
-        }
-    }
-    private fun loadImage(coroutineScope: CoroutineScope, matrixUri: MediaMxcURI): ImageBitmap? {
+    private fun loadImage(coroutineScope: CoroutineScope, matrixUri: MediaMxcURI): AsyncLoadedImage {
         if (loadedImages.containsKey(matrixUri)) {
             return loadedImages[matrixUri]!!
         }
+        val res = loadedImages.getOrPut(matrixUri, defaultValue = { AsyncLoadedImage() })
         coroutineScope.launch {
             withContext(Dispatchers.IO) {
                 val url = matrixUri.toUrl()
@@ -68,13 +62,13 @@ object AsyncImageStorage {
                 val asImageBitmap = bitmap.asImageBitmap()
                 cacheMutex.withLock {
                     val elapsed = measureNanoTime {
-                        loadedImages[matrixUri] = asImageBitmap
+                        loadedImages[matrixUri]!!.img.value = asImageBitmap
                     }
                     Log.i("Async Image Storage", "Cached bytes: $cachedBytes. HashMap insertion took $elapsed ns")
                 }
             }
         }
-        return loadedImages[matrixUri]
+        return res
     }
 
     @Composable
@@ -83,11 +77,9 @@ object AsyncImageStorage {
         modifier: Modifier = Modifier,
         url: MediaMxcURI,
     ) {
-        val bitmap =
-            remember { mutableStateOf(loadImage(coroutineScope = coroutineScope, matrixUri = url)) }
-        val bm = bitmap.value
-        if(bm != null) {
-            Image(modifier = modifier, bitmap = bm, contentDescription = null)
+        val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
+        if(bitmap.img.value != null) {
+            Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = null)
         }
     }
 }
