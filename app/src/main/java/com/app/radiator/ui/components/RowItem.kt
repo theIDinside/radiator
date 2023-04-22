@@ -60,7 +60,7 @@ fun ImageAvatar(
         if(avatarUrl != null) {
             AsyncImageStorage.AsyncImage(coroutineScope = coroutineScope, url = avatarUrl)
         } else if(avatarData.url != null) {
-            AsyncImageStorage.AsyncImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarData.url, "matrix.org"))
+            AsyncImageStorage.AsyncImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarData.url))
         }
     }
 }

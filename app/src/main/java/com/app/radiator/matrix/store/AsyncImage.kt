@@ -21,13 +21,14 @@ import kotlinx.coroutines.withContext
 import java.net.URL
 import kotlin.system.measureNanoTime
 
-data class MediaMxcURI(val url: String, val homeServer: String)
+// we default home server to matrix.org as it's the sliding sync capable home server
+// we are testing against
+data class MediaMxcURI(val url: String, val homeServer: String = "matrix.org")
 
 const val THUMBNAIL_QUERY = "?width=64&height=64&method=scale"
 
 fun MediaMxcURI.toUrl(): URL {
-
-    val urlString = this.url.replace("mxc://", "https://matrix.org/_matrix/media/r0/thumbnail/")
+    val urlString = this.url.replace("mxc://", "https://$homeServer/_matrix/media/r0/thumbnail/")
     val withQuery = "$urlString$THUMBNAIL_QUERY"
     return URL(withQuery)
 }
