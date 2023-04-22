@@ -25,15 +25,40 @@ import kotlin.system.measureNanoTime
 
 // we default home server to matrix.org as it's the sliding sync capable home server
 // we are testing against
-data class MediaMxcURI(val url: String, val homeServer: String = "matrix.org")
 
-const val THUMBNAIL_QUERY = "?width=64&height=64&method=scale"
+sealed interface MxcURI {
+    data class Thumbnail(
+        val width: Int,
+        val height: Int,
+        val url: String,
+        val homeServer: String = "matrix.org",
+    ) : MxcURI
 
-fun MediaMxcURI.toUrl(): URL {
-    val urlString = this.url.replace("mxc://", "https://$homeServer/_matrix/media/r0/thumbnail/")
-    val withQuery = "$urlString$THUMBNAIL_QUERY"
-    return URL(withQuery)
+    data class Download(val url: String, val homeServer: String = "matrix.org") : MxcURI
+
+    fun toUrl(): URL = when (this) {
+        is Thumbnail -> {
+            val urlString =
+                this.url.replace("mxc://", "https://$homeServer/_matrix/media/r0/thumbnail/")
+            val thumbnailQuery = "?width=$width&height=$height&method=scale"
+            val withQuery = "$urlString$thumbnailQuery"
+            URL(withQuery)
+        }
+
+        is Download -> {
+            val urlString =
+                this.url.replace("mxc://", "https://$homeServer/_matrix/media/r0/download/")
+            URL(urlString)
+        }
+    }
 }
+
+// /_matrix/media/r0/download/{serverName}/{mediaId}
+// /_matrix/media/r0/preview_url
+// /_matrix/media/r0/thumbnail/{serverName}/{mediaId}
+
+// Download of other kind of file; not represented by images
+// /_matrix/media/r0/download/{serverName}/{mediaId}/{fileName}
 
 class AsyncLoadedImage(img: ImageBitmap? = null) {
     var img = mutableStateOf(img)
@@ -47,11 +72,11 @@ object AsyncImageStorage {
 
     object Cache {
         val cacheMutex = Mutex()
-        val loadedImages = HashMap<MediaMxcURI, AsyncLoadedImage>()
+        val loadedImages = HashMap<MxcURI, AsyncLoadedImage>()
         var cachedBytes = 0
     }
 
-    private fun loadImage(coroutineScope: CoroutineScope, matrixUri: MediaMxcURI): AsyncLoadedImage {
+    private fun loadImage(coroutineScope: CoroutineScope, matrixUri: MxcURI): AsyncLoadedImage {
         if (loadedImages.containsKey(matrixUri)) {
             return loadedImages[matrixUri]!!
         }
@@ -67,7 +92,10 @@ object AsyncImageStorage {
                     val elapsed = measureNanoTime {
                         loadedImages[matrixUri]!!.img.value = asImageBitmap
                     }
-                    Log.i("Async Image Storage", "Cached bytes: $cachedBytes. HashMap insertion took $elapsed ns")
+                    Log.i(
+                        "Async Image Storage",
+                        "Cached bytes: $cachedBytes. HashMap insertion took $elapsed ns"
+                    )
                 }
             }
         }
@@ -75,22 +103,26 @@ object AsyncImageStorage {
     }
 
     @Composable
-    fun AsyncCachedImage(
+    fun AsyncCachedThumbnail(
         coroutineScope: CoroutineScope,
         modifier: Modifier = Modifier,
-        url: MediaMxcURI,
+        url: MxcURI.Thumbnail,
     ) {
         val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
-        if(bitmap.img.value != null) {
-            Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = null)
+        if (bitmap.img.value != null) {
+            Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = "Avatar")
         }
     }
 
     @Composable
-    fun AsyncImageWithLoadingAnimation(modifier: Modifier, coroutineScope: CoroutineScope, url: MediaMxcURI) {
+    fun AsyncImageWithLoadingAnimation(
+        modifier: Modifier,
+        coroutineScope: CoroutineScope,
+        url: MxcURI.Download,
+    ) {
         val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
-        if(bitmap.img.value != null) {
-            Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = null)
+        if (bitmap.img.value != null) {
+            Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = "Image")
         } else {
             LoadingAnimation(size = 32.dp)
         }

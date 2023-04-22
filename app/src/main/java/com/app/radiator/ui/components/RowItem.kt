@@ -16,11 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.app.radiator.matrix.store.AsyncImageStorage.AsyncCachedImage
-import com.app.radiator.matrix.store.MediaMxcURI
+import com.app.radiator.matrix.store.AsyncImageStorage.AsyncCachedThumbnail
+import com.app.radiator.matrix.store.MxcURI
 
 @Composable
-fun Avatar(modifier: Modifier = Modifier, avatarData: AvatarData, size: Dp = 40.dp) {
+fun Avatar(modifier: Modifier = Modifier, avatarData: AvatarData, size: Dp = 48.dp) {
     val commonModifier = modifier
         .size(size)
         .clip(CircleShape)
@@ -55,7 +55,7 @@ fun ImageAvatar(
     Box(
         modifier.background(brush = initialsGradient)
     ) {
-        AsyncCachedImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarUrl))
+        AsyncCachedThumbnail(coroutineScope = coroutineScope, url = MxcURI.Thumbnail(width = 64, height = 64, url = avatarUrl))
     }
 }
 
