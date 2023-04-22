@@ -1,7 +1,11 @@
 package com.app.radiator.ui.components
 
+import android.annotation.SuppressLint
+import android.icu.text.SimpleDateFormat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -9,7 +13,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -17,7 +20,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.app.radiator.matrix.store.AsyncImageStorage
-import com.app.radiator.matrix.store.MediaMxcURI
+import com.app.radiator.matrix.store.MxcURI
 import com.app.radiator.matrix.timeline.*
 import com.app.radiator.matrix.timeline.displayName
 import java.util.*
@@ -34,8 +37,8 @@ val preview = TimelineItemVariant.Event(
     reactions = listOf(),
     sender = "@simonfarre:matrix.org",
     senderProfile = ProfileDetails.Ready(
-        "simonfarre",
-        displayName = "foo.com",
+        null,
+        displayName = "simonfarre",
         displayNameAmbiguous = false
     ),
     timestamp = 0u,
@@ -48,7 +51,7 @@ val preview = TimelineItemVariant.Event(
     groupedByUser = false
 )
 
-val RoomViewLeftOffset = 35.dp
+val RoomViewLeftOffset = 7.dp
 
 @Preview
 @Composable
@@ -83,6 +86,7 @@ fun DayDivider(date: String = "April 10, 2023") {
 
 }
 
+@SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalFoundationApi::class)
 @Preview
 @Composable
@@ -119,18 +123,14 @@ fun RoomMessageItem(
                                 .offset(y = 2.dp)
                         if (avatarData != null) {
                             Column(modifier = innerModifier) {
-                                Avatar(avatarData=avatarData, size = 25.dp)
-                                Spacer(modifier = Modifier.width(20.dp))
+                                Avatar(avatarData = avatarData, size = 25.dp)
                             }
                         }
 
-                        Column() {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             val userNameDisplayText = buildAnnotatedString {
                                 withStyle(SpanStyle(color = Color(255, 165, 0))) {
-                                    append(item.senderProfile.displayName() ?: "unavailable")
-                                    append(" [ ")
-                                    append(item.sender)
-                                    append(" ]")
+                                    append(item.senderProfile.displayName() ?: item.sender)
                                 }
                             }
                             Text(userNameDisplayText)
@@ -141,16 +141,34 @@ fun RoomMessageItem(
                 Row(
                     modifier = Modifier
                         .offset(RoomViewLeftOffset)
-                        .paddingFrom(alignmentLine = LastBaseline, after = 10.dp)
+                        .clickable { },
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val messageTimeStampText =
+                        SimpleDateFormat("HH:mm").format(Date(item.timestamp.toLong())).toString()
+                    val messageTimeStamp = buildAnnotatedString {
+                        withStyle(SpanStyle(color = Color.Gray)) {
+                            append(messageTimeStampText)
+                        }
+                    }
+                    Text(text = messageTimeStamp, fontSize = 8.sp)
+                    Spacer(modifier = Modifier.width(10.dp))
                     when (val contentTypeItem = item.message) {
                         is Message.Text -> {
                             Text(contentTypeItem.body)
                         }
+
                         is Message.Image -> {
-                            val src = MediaMxcURI(contentTypeItem.source)
-                            AsyncImageStorage.AsyncImageWithLoadingAnimation(modifier = Modifier, coroutineScope = coroutineScope, url = src)
+                            val uri = MxcURI.Download(contentTypeItem.source)
+                            AsyncImageStorage.AsyncImageWithLoadingAnimation(
+                                modifier = Modifier
+                                    .border(width = 2.dp, color = Color.Black),
+                                coroutineScope = coroutineScope,
+                                url = uri
+                            )
                         }
+
                         else -> {
                             Text(contentTypeItem.toString())
                         }

@@ -9,15 +9,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
-import com.app.radiator.matrix.MatrixClient
 import com.app.radiator.ui.components.RoomSummary
 import com.app.radiator.ui.components.RoomSummaryRow
 import kotlinx.collections.immutable.ImmutableCollection
-import org.matrix.rustcomponents.sdk.SlidingSyncRoom
 
 @Composable
-fun RoomList(navController: NavHostController, roomList: ImmutableCollection<RoomSummary>, onClick: (RoomSummary) -> Unit = {}) {
+fun RoomList(roomList: ImmutableCollection<RoomSummary>, onClick: (RoomSummary) -> Unit = {}) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         roomList.forEach {
             RoomSummaryRow(room = it, onClick = onClick)

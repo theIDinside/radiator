@@ -29,6 +29,7 @@ import com.app.radiator.ui.components.DayDivider
 import com.app.radiator.ui.components.RoomMessageItem
 import com.app.radiator.matrix.timeline.ProfileDetails
 import com.app.radiator.matrix.timeline.TimelineState
+import com.app.radiator.ui.components.LoadingAnimation
 import com.app.radiator.ui.components.MessageComposer
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -46,7 +47,7 @@ fun ProfileDetails.avatarData(userId: String): AvatarData? {
 
 @Composable
 fun RoomRoute(
-    timelineState: TimelineState
+    timelineState: TimelineState,
 ) {
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -79,6 +80,7 @@ fun RoomRoute(
                             )
                         }
                         is TimelineItemVariant.Virtual -> {
+                            Spacer(modifier = Modifier.height(5.dp))
                             Box() {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -94,6 +96,7 @@ fun RoomRoute(
                                         }
 
                                         VirtualTimelineItem.LoadingIndicator -> {
+                                            LoadingAnimation(size = 100.dp)
                                             Log.i("RoomRoute", "Loading indicator seen")
                                         }
 
@@ -102,7 +105,7 @@ fun RoomRoute(
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(5.dp))
                         }
                         TimelineItemVariant.Unknown -> TODO("Should never happen")
                     }
@@ -115,32 +118,33 @@ fun RoomRoute(
         }, bottomBar = {
             MessageComposer(sendMessageOp = { timelineState.sendMessage(it) })
         },
-        floatingActionButton = {
-            // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
-            //  it means this composable will get a recomposition triggered _every time the user scrolls_
-            //  - I'm not willing to pay that cost, right now
-            FloatingActionButton(
-                onClick = {
-                    coroutineScope.launch {
-                        lazyListState.animateScrollToItem(messages.value.size)
-                    }
-                },
-                shape = CircleShape,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .size(40.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ) {
-                Icon(Icons.Default.KeyboardArrowDown, "")
-            }
-        },
-        floatingActionButtonPosition = FabPosition.End)
+            floatingActionButton = {
+                // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
+                //  it means this composable will get a recomposition triggered _every time the user scrolls_
+                //  - I'm not willing to pay that cost, right now
+                FloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            lazyListState.animateScrollToItem(messages.value.size)
+                        }
+                    },
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .size(40.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, "")
+                }
+            },
+            floatingActionButtonPosition = FabPosition.End
+        )
 
         // Auto-scroll when new timeline items appear
         LaunchedEffect(messages.value) {
             coroutineScope.launch {
-                if(lazyListState.isScrolledToTheEnd() && !lazyListState.isScrollInProgress) {
+                if (lazyListState.isScrolledToTheEnd() && !lazyListState.isScrollInProgress) {
                     lazyListState.animateScrollToItem(messages.value.size)
                 }
             }
@@ -150,4 +154,5 @@ fun RoomRoute(
 
 // I have no idea why this is, but it seems as though, 2 is the magic number here; if we say 0, 1 or 2, this all goes to shit
 // we have to compare (less-than) against 3, to "be sure" that we're at the end. Seems lazy column isn't *exact* in it's measurements
-fun LazyListState.isScrolledToTheEnd() = (layoutInfo.totalItemsCount - (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0)) < 3
+fun LazyListState.isScrolledToTheEnd() =
+    (layoutInfo.totalItemsCount - (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0)) < 3

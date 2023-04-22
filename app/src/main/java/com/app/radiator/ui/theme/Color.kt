@@ -14,6 +14,7 @@ val radiatorThemeColorsSetting = staticCompositionLocalOf { lightRadiatorTheme }
 
 @Stable
 class RadiatorThemeColors(
+    buttonIconTint: Color,
     messageFromMeBackground: Color,
     messageFromOtherBackground: Color,
     messageHighlightedBackground: Color,
@@ -22,6 +23,9 @@ class RadiatorThemeColors(
     textActionCritical: Color,
     isLight: Boolean,
 ) {
+
+    var buttonIconTint by mutableStateOf(buttonIconTint)
+        private set
     var messageFromMeBackground by mutableStateOf(messageFromMeBackground)
         private set
     var messageFromOtherBackground by mutableStateOf(messageFromOtherBackground)
@@ -113,4 +117,5 @@ val lightRadiatorTheme = RadiatorThemeColors(
     quinary = Gray_50,
     textActionCritical = TextColorCriticalLight,
     isLight = true,
+    buttonIconTint = Gray_250
 )
