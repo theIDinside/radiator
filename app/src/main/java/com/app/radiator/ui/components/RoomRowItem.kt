@@ -1,6 +1,5 @@
 package com.app.radiator.ui.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,14 +12,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.app.radiator.ui.theme.*
-import org.matrix.rustcomponents.sdk.Room
 import org.matrix.rustcomponents.sdk.SlidingSyncRoom
 
 
@@ -28,17 +25,6 @@ private val minHeight = 72.dp
 
 val AvatarGradientStart = Color(0x0F4CA1AF)
 val AvatarGradientEnd = Color(0xFFF000E5)
-
-sealed class AvatarSize(open val dp: Dp) {
-
-    object SMALL : AvatarSize(32.dp)
-    object MEDIUM : AvatarSize(40.dp)
-    object BIG : AvatarSize(48.dp)
-    object HUGE : AvatarSize(96.dp)
-
-    // FIXME maybe remove this field and switch back to an enum (or remove this class) when design system will be integrated
-    data class Custom(override val dp: Dp) : AvatarSize(dp)
-}
 
 @Immutable
 data class AvatarData(
@@ -104,7 +90,7 @@ internal fun DefaultRoomSummaryRow(
             .height(IntrinsicSize.Min),
         verticalAlignment = CenterVertically
     ) {
-        Avatar(avatarData = room.avatarData, avatarUrl = null)
+        Avatar(avatarData = room.avatarData)
         Column(
             modifier = Modifier
                 .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)
@@ -124,7 +110,7 @@ internal fun DefaultRoomSummaryRow(
             Text(
                 text = room.lastMessage,
                 color = Azure,
-                fontSize = 14.sp,
+                fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -151,5 +137,3 @@ internal fun DefaultRoomSummaryRow(
         }
     }
 }
-
-internal fun Room.avatarData(): AvatarData = AvatarData(id = this.id(), name = displayName(), url = avatarUrl())

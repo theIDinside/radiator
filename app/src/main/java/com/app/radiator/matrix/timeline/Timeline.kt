@@ -2,15 +2,12 @@ package com.app.radiator.matrix.timeline
 
 import android.util.Log
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.ImageBitmap
-import com.app.radiator.matrix.store.MediaMxcURI
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -184,7 +181,7 @@ enum class MembershipChange {
     KNOCK_RETRACTED, KNOCK_DENIED, NOT_IMPLEMENTED;
 }
 */
-enum class MessageFormat { HTML, UNKNOWN; }
+// enum class MessageFormat { HTML, UNKNOWN; }
 
 /*
 data class ThumbnailInfo(
@@ -562,7 +559,6 @@ class TimelineState(
     private lateinit var taskHandle: TaskHandle
     private val timelineStateRange =
         MutableStateFlow(CanRequestMoreState(hasMore = true, isLoading = false))
-    val avatarUrls = HashMap<String, MediaMxcURI?>()
 
     init {
         val roomSubscription =
@@ -630,7 +626,7 @@ class TimelineState(
         this.timelineStateRange.value = newState
     }
 
-    private suspend fun updateTimelineItems(block: MutableList<TimelineItemVariant>.() -> Unit) {
+    private fun updateTimelineItems(block: MutableList<TimelineItemVariant>.() -> Unit) {
         val mutableList = timelineItems.value.toMutableList()
         block(mutableList)
         timelineItems.value = mutableList

@@ -17,8 +17,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -77,8 +75,7 @@ fun RoomRoute(
                             RoomMessageItem(
                                 item = timelineItem,
                                 avatarData = timelineItem.senderProfile.avatarData(timelineItem.sender),
-                                shouldGroup = timelineItem.groupedByUser,
-                                avatarUrls = timelineState.avatarUrls,
+                                shouldGroup = timelineItem.groupedByUser
                             )
                         }
                         is TimelineItemVariant.Virtual -> {

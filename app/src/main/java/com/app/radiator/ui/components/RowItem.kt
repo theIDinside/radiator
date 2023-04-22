@@ -20,11 +20,11 @@ import com.app.radiator.matrix.store.AsyncImageStorage.AsyncCachedImage
 import com.app.radiator.matrix.store.MediaMxcURI
 
 @Composable
-fun Avatar(modifier: Modifier = Modifier, avatarData: AvatarData, size: Dp = 40.dp, avatarUrl: MediaMxcURI?) {
+fun Avatar(modifier: Modifier = Modifier, avatarData: AvatarData, size: Dp = 40.dp) {
     val commonModifier = modifier
         .size(size)
         .clip(CircleShape)
-    if (avatarData.url == null && avatarUrl == null) {
+    if (avatarData.url == null) {
         InitialsAvatar(
             avatarData = avatarData,
             size = size,
@@ -33,8 +33,7 @@ fun Avatar(modifier: Modifier = Modifier, avatarData: AvatarData, size: Dp = 40.
     } else {
         ImageAvatar(
             modifier = commonModifier,
-            avatarData = avatarData,
-            avatarUrl = avatarUrl
+            avatarUrl = avatarData.url,
         )
     }
 }
@@ -42,8 +41,7 @@ fun Avatar(modifier: Modifier = Modifier, avatarData: AvatarData, size: Dp = 40.
 @Composable
 fun ImageAvatar(
     modifier: Modifier = Modifier,
-    avatarData: AvatarData,
-    avatarUrl: MediaMxcURI?
+    avatarUrl: String,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val initialsGradient = Brush.linearGradient(
@@ -57,11 +55,7 @@ fun ImageAvatar(
     Box(
         modifier.background(brush = initialsGradient)
     ) {
-        if(avatarUrl != null) {
-            AsyncCachedImage(coroutineScope = coroutineScope, url = avatarUrl)
-        } else if(avatarData.url != null) {
-            AsyncCachedImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarData.url))
-        }
+        AsyncCachedImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarUrl))
     }
 }
 

@@ -88,7 +88,6 @@ fun DayDivider(date: String = "April 10, 2023") {
 @Composable
 fun RoomMessageItem(
     item: TimelineItemVariant.Event = preview,
-    avatarUrls: HashMap<String, MediaMxcURI?> = HashMap(),
     selected: Boolean = false,
     onClick: () -> Unit = {},
     onClickHold: () -> Unit = {},
@@ -120,7 +119,7 @@ fun RoomMessageItem(
                                 .offset(y = 2.dp)
                         if (avatarData != null) {
                             Column(modifier = innerModifier) {
-                                Avatar(avatarData=avatarData, size = 25.dp, avatarUrl=avatarUrls[avatarData.id])
+                                Avatar(avatarData=avatarData, size = 25.dp)
                                 Spacer(modifier = Modifier.width(20.dp))
                             }
                         }
