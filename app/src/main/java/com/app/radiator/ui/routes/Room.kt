@@ -113,7 +113,7 @@ fun RoomRoute(
                 }
             }
         }, bottomBar = {
-            MessageComposer(sendMessageOp = { it -> timelineState.sendMessage(it) })
+            MessageComposer(sendMessageOp = { timelineState.sendMessage(it) })
         },
         floatingActionButton = {
             // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost

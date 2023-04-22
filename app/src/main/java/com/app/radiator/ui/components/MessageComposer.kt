@@ -12,12 +12,15 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Preview
 @Composable
 fun MessageComposer(
@@ -25,7 +28,7 @@ fun MessageComposer(
     sendMessageOp: (String) -> Unit = { Log.w("MessageComposer", "Send message not implemented") },
 ) {
     val (messageInput, setMessage) = remember { mutableStateOf("") }
-
+    val keyboardController = LocalSoftwareKeyboardController.current
     fun sendMessage() {
         sendMessageOp(messageInput)
     }
@@ -42,7 +45,12 @@ fun MessageComposer(
             value = messageInput,
             onValueChange = setMessage,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions { sendMessage() },
+            keyboardActions = KeyboardActions (
+                onSend = {
+                    sendMessage()
+                    setMessage("")
+                    keyboardController?.hide()
+                }),
             placeholder = { Text("Write message...") }
         )
     }
