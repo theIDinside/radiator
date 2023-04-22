@@ -1,7 +1,6 @@
 package com.app.radiator
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -92,8 +91,7 @@ class MainActivity : ComponentActivity() {
                                 .collectAsState(initial = emptyList())
 
                             if (rooms.value.isNotEmpty()) {
-                                RoomList(navController = navController,
-                                    roomList = rooms.value.toImmutableList(),
+                                RoomList(roomList = rooms.value.toImmutableList(),
                                     onClick = { summary ->
                                         navController.navigate(Routes.Room.route + "/${summary.roomId}")
                                     })
