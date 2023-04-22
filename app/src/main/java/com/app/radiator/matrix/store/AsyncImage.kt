@@ -9,9 +9,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.dp
 import com.app.radiator.matrix.store.AsyncImageStorage.Cache.cacheMutex
 import com.app.radiator.matrix.store.AsyncImageStorage.Cache.cachedBytes
 import com.app.radiator.matrix.store.AsyncImageStorage.Cache.loadedImages
+import com.app.radiator.ui.components.LoadingAnimation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,6 +83,16 @@ object AsyncImageStorage {
         val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
         if(bitmap.img.value != null) {
             Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = null)
+        }
+    }
+
+    @Composable
+    fun AsyncImageWithLoadingAnimation(modifier: Modifier, coroutineScope: CoroutineScope, url: MediaMxcURI) {
+        val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
+        if(bitmap.img.value != null) {
+            Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = null)
+        } else {
+            LoadingAnimation(size = 32.dp)
         }
     }
 }
