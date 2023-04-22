@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.app.radiator.matrix.store.AsyncImageStorage
+import com.app.radiator.matrix.store.AsyncImageStorage.AsyncCachedImage
 import com.app.radiator.matrix.store.MediaMxcURI
 
 @Composable
@@ -58,9 +58,9 @@ fun ImageAvatar(
         modifier.background(brush = initialsGradient)
     ) {
         if(avatarUrl != null) {
-            AsyncImageStorage.AsyncImage(coroutineScope = coroutineScope, url = avatarUrl)
+            AsyncCachedImage(coroutineScope = coroutineScope, url = avatarUrl)
         } else if(avatarData.url != null) {
-            AsyncImageStorage.AsyncImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarData.url))
+            AsyncCachedImage(coroutineScope = coroutineScope, url = MediaMxcURI(avatarData.url))
         }
     }
 }

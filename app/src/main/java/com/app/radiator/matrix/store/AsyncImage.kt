@@ -73,7 +73,7 @@ object AsyncImageStorage {
     }
 
     @Composable
-    fun AsyncImage(
+    fun AsyncCachedImage(
         coroutineScope: CoroutineScope,
         modifier: Modifier = Modifier,
         url: MediaMxcURI,
