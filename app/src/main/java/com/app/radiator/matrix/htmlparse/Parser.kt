@@ -1,7 +1,17 @@
 package com.app.radiator.matrix.htmlparse
 
+import android.text.SpannableString
+import android.text.style.URLSpan
+import android.text.util.Linkify.PHONE_NUMBERS
+import android.text.util.Linkify.WEB_URLS
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.core.text.util.LinkifyCompat
 import com.app.radiator.ui.components.ParsedMessageNode
+import com.app.radiator.ui.theme.LinkColor
 
 val whiteListedTags = setOf(
   "font",
@@ -60,6 +70,8 @@ enum class Tag {
   LI,
   PRE,
   CODE,
+  A,
+
   // Our own Pseudo-HTML-elements
   Root, InnerTextNode
 }
@@ -76,7 +88,8 @@ val TagMap = mapOf(
   "h4" to Tag.H4,
   "h5" to Tag.H5,
   "h6" to Tag.H6,
-  "p" to Tag.PARAGRAPH
+  "p" to Tag.PARAGRAPH,
+  "a" to Tag.A
 )
 
 fun findClose(start: Int, input: String): Int = input.indexOf(startIndex = start + 1, char = '>')
@@ -116,6 +129,8 @@ sealed class ParsedTag(val tagSpan: TagRangeEndInclusive, val tag: Tag) {
    */
   fun docIdxStart(): Int = tagSpan.start
 
+  fun docTagIdxEnd(): Int = tagSpan.endInclusive
+
   /**
    * Returns index into document where this tag ends; i.e the position _after_ </tag>
    */
@@ -140,17 +155,23 @@ fun parseTag(start: Int, input: String): ParsedTag {
   } catch (ex: Exception) {
     // if the tag hade classes etc - that's pretty rare though
     val space = sub.indexOf(' ')
-    if (space == -1) {
-      throw Exception("Could not find space inside tag that has attributes. Contents: '$sub' in document: \n$input")
+    val tag = try {
+      sub.subSequence(0, space).toTag()!!
+    } catch (ex: Exception) {
+      throw Exception("$ex. Doc contents: $input")
     }
-    val tag = sub.subSequence(0, space).toTag()!!
     val tagSpan = start..end
     ParsedTag.OpenTag(tagSpan = tagSpan, tag = tag)
   }
 }
 
 
-fun CharSequence.toTag(): Tag? = TagMap[this]
+fun CharSequence.toTag(): Tag? {
+  if (TagMap[this] == null) {
+    throw Exception("Failed to tokenize string input $this")
+  }
+  return TagMap[this]
+}
 
 // Abstract type that also aims to represent itself as the root node
 abstract class DomNode(val openTag: ParsedTag.OpenTag, val parentNode: DomNode?) {
@@ -235,7 +256,8 @@ class DomParagraphNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   }
 }
 
-class DomOrderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
+class DomOrderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
+  DomNode(openTag, parentNode) {
   private var children: ArrayList<DomNode> = ArrayList()
   override fun build(doc: String): ParsedMessageNode {
     return ParsedMessageNode.OrderedList(children.filter { it is DomListItem }
@@ -262,7 +284,8 @@ class DomUnorderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   }
 }
 
-class DomHeadingNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
+class DomHeadingNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
+  DomNode(openTag, parentNode) {
   var children: ArrayList<DomNode> = ArrayList()
   private val headingVariant = openTag.tag.ordinal
   override fun build(doc: String): ParsedMessageNode {
@@ -276,16 +299,65 @@ class DomHeadingNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode
 
 class DomTextNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
   override fun build(doc: String): ParsedMessageNode? {
-    val start = openTag.innerContentsShouldStart()
-    val end = closeTag.innerContentsShouldEnd()
-    val text = doc.subSequence(start, end).toString()
-    return if(text == "\n") null
-    else ParsedMessageNode.Text(text = AnnotatedString(text = text))
+    val contentsStart = openTag.innerContentsShouldStart()
+    val contentsEnd = closeTag.innerContentsShouldEnd()
+    val text = doc.subSequence(contentsStart, contentsEnd).toString()
+    return if (text == "\n") null
+    else {
+      val annotatedString = buildAnnotatedString {
+        append(text)
+        val textSpan = SpannableString(text)
+        LinkifyCompat.addLinks(textSpan, WEB_URLS or PHONE_NUMBERS)
+        for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
+          val begin = textSpan.getSpanStart(span)
+          val end = textSpan.getSpanEnd(span)
+          addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
+          addStringAnnotation(tag = "URL", annotation = span.url, start = begin, end = end)
+        }
+      }
+      ParsedMessageNode.TextNode(text = annotatedString)
+    }
   }
 
   override fun addNode(node: DomNode) {
     throw Exception("Can't add child node to ${this.openTag}")
   }
+}
+
+const val HREF = "href=\""
+
+class DomAHrefNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
+  DomNode(openTag, parentNode) {
+  fun parseUrl(subSequence: CharSequence): String {
+    val pos = subSequence.indexOf(HREF)
+    var lastPosOfQuote = pos
+    var idx = pos
+    for (ch in subSequence.subSequence(pos + 1, subSequence.length)) {
+      if (ch == '"') lastPosOfQuote = idx
+      idx++
+    }
+    val url = subSequence.subSequence(pos + HREF.length, lastPosOfQuote + 1)
+    return url.toString()
+  }
+
+  override fun build(doc: String): ParsedMessageNode {
+    val start = openTag.innerContentsShouldStart()
+    val end = closeTag.innerContentsShouldEnd()
+    val url = parseUrl(doc.subSequence(openTag.docIdxStart(), openTag.docTagIdxEnd()))
+    val linkColor = Color.Blue
+    val linkText = buildAnnotatedString {
+      withStyle(SpanStyle(color = linkColor)) {
+        append(doc.substring(start, end))
+      }
+      addStringAnnotation(tag = "URL", annotation = url, start = start, end = end)
+    }
+    return ParsedMessageNode.HrefNode(linkText, url = url)
+  }
+
+  override fun addNode(node: DomNode) {
+    throw Exception("This is a Text-content node. Adding other nodes to this is an error")
+  }
+
 }
 
 // TODO(simon): implement plugin functionality where we can inject our own parsing plugins.
@@ -300,11 +372,12 @@ class HTMLParser {
     val len = body.length
     var currentInnerTextNode: DomTextNode? = null
 
-    // Helper function that is used to filter out newlines, etc, that should not be in the final result
+    // Helper function that is used to filter out newlines, that we should not parse or interpret
+    // as well as ignoring to record the innerText of <a> elements, as our <a>-node holds the contents itself (like a normal text node)
     fun shouldRecordFreestanding(): Boolean {
       return if (currNode != null) {
         when (currNode) {
-          is DomOrderedList, is DomUnorderedList -> false
+          is DomOrderedList, is DomUnorderedList, is DomAHrefNode -> false
           else -> true
         }
       } else true
@@ -317,7 +390,11 @@ class HTMLParser {
               tag = Tag.InnerTextNode, tagSpan = pos..pos
             )
           )
-          currNode?.addNode(currentInnerTextNode)
+          try {
+            currNode?.addNode(currentInnerTextNode)
+          } catch (ex: Exception) {
+            throw Exception("$ex. Doc contents: $body")
+          }
           currentInnerTextNode = null
         }
         when (val tag = parseTag(start = pos, body)) {
@@ -350,6 +427,7 @@ class HTMLParser {
               Tag.Root -> DomRootNode(openTag = tag, parentNode = currNode)
               Tag.InnerTextNode -> throw Exception("Pseudo nodes can't be parsed from document text; we create them after the fact")
               Tag.PARAGRAPH -> DomParagraphNode(openTag = tag, parentNode = currNode)
+              Tag.A -> DomAHrefNode(openTag = tag, parentNode = currNode)
             }
             currNode?.addNode(newNode)
             currNode = newNode

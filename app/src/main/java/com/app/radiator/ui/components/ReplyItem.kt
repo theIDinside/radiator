@@ -97,9 +97,10 @@ fun ReplyItem(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Spacer(Modifier.width(2.dp))
-                                Avatar(avatarData = avatarData!!, size = 13.dp)
+                                if(avatarData != null)
+                                    Avatar(avatarData = avatarData, size = 13.dp)
                                 Spacer(Modifier.width(5.dp))
-                                Text(text = avatarData.name!!)
+                                Text(text = avatarData?.name ?: "unavailable")
                                 Spacer(Modifier.width(5.dp))
                             }
                         }
@@ -118,11 +119,7 @@ fun ReplyItem(
 @Composable
 fun ReplyItemMessageNode(
     rootMessageNode: ParsedMessageNode,
-    avatarData: AvatarData? = AvatarData(
-        id = preview.sender,
-        name = preview.senderProfile.displayName(),
-        url = null
-    ),
+    avatarData: AvatarData?,
     onClickInReplyTo: () -> Unit = {},
     onClickUserRepliedTo: () -> Unit = {},
 ) {
@@ -163,14 +160,15 @@ fun ReplyItemMessageNode(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Spacer(Modifier.width(2.dp))
-                                Avatar(avatarData = avatarData!!, size = 13.dp)
+                                if(avatarData != null)
+                                    Avatar(avatarData = avatarData, size = 13.dp)
                                 Spacer(Modifier.width(5.dp))
-                                Text(text = avatarData.name!!)
+                                Text(text = avatarData?.name ?: "unavailable")
                                 Spacer(Modifier.width(5.dp))
                             }
                         }
                     }
-                    rootMessageNode.Display(modifier = Modifier, isInline = false, textStyle = null)
+                    rootMessageNode.Display(modifier = Modifier, isInline = false, textStyle = null, onClickedEvent = parsedNodeClickHandlerLogger)
                 }
             }
         }

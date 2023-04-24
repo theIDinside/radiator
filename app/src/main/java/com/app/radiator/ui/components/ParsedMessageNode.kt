@@ -21,6 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -47,10 +50,15 @@ sealed interface ParsedMessageNode {
   // Container types; holds no text themselves, any text they hold lives in a MessageItem.Text node
   data class Root(val children: List<ParsedMessageNode>) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       @Composable
       fun doRow(node: ParsedMessageNode) {
-        node.Display(modifier = modifier, false, textStyle)
+        node.Display(modifier = modifier, false, textStyle, onClickedEvent)
       }
 
       Column() {
@@ -58,16 +66,41 @@ sealed interface ParsedMessageNode {
           doRow(child)
         }
       }
-
     }
+  }
+
+  data class HrefNode(val linkText: AnnotatedString, val url: String) : ParsedMessageNode {
+    @Composable
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
+      Text(
+        modifier = Modifier.clickable {
+          onClickedEvent(this)
+        },
+        text = linkText,
+        textDecoration = TextDecoration.Underline,
+        fontWeight = FontWeight.Bold,
+        overflow = TextOverflow.Ellipsis,
+      )
+    }
+
   }
 
   data class ListNode(val items: List<ParsedMessageNode>) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       Row(verticalAlignment = Alignment.Bottom) {
         for (item in items) {
-          item.Display(modifier, isInline = true, textStyle)
+          item.Display(modifier, isInline = true, textStyle, onClickedEvent)
         }
       }
     }
@@ -75,12 +108,20 @@ sealed interface ParsedMessageNode {
 
   data class UnorderedList(val list: List<ParsedMessageNode>) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       Column() {
         for (item in list) {
-          Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
-            androidx.compose.material3.Text(text = AnnotatedString("•"))
-            item.Display(modifier, isInline, textStyle)
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.Bottom
+          ) {
+            Text(text = AnnotatedString("•"))
+            item.Display(modifier, isInline, textStyle, onClickedEvent)
           }
         }
       }
@@ -89,15 +130,20 @@ sealed interface ParsedMessageNode {
 
   data class OrderedList(val list: List<ParsedMessageNode>) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       var idx = 1
       Column {
         for (item in list) {
           Row(
             horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Top
           ) {
-            androidx.compose.material3.Text(text = AnnotatedString("${idx}. "))
-            item.Display(modifier, isInline, textStyle)
+            Text(text = AnnotatedString("${idx}. "))
+            item.Display(modifier, isInline, textStyle, onClickedEvent)
           }
           idx++
         }
@@ -107,11 +153,16 @@ sealed interface ParsedMessageNode {
 
   data class Heading(val size: Int, val items: List<ParsedMessageNode>) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       val style = headingStyle(size = size)
       Row() {
         for (item in items) {
-          item.Display(modifier, isInline = true, style)
+          item.Display(modifier, isInline = true, style, onClickedEvent)
         }
       }
     }
@@ -121,7 +172,7 @@ sealed interface ParsedMessageNode {
   data class CodeBlock(val text: AnnotatedString) : ParsedMessageNode {
 
     @Composable
-    fun InlineDisplay(textStyle: TextStyle?) {
+    fun InlineDisplay(textStyle: TextStyle?, onClickedEvent: (ParsedMessageNode) -> Unit) {
       val inlineShape = RoundedCornerShape(7.dp)
       Box(
         modifier = Modifier
@@ -129,6 +180,9 @@ sealed interface ParsedMessageNode {
           .background(color = Color(244, 246, 250))
           .padding(start = 5.dp, end = 5.dp)
           .clip(inlineShape)
+          .clickable {
+            onClickedEvent(this)
+          }
 
       ) {
         if (textStyle != null) {
@@ -140,7 +194,7 @@ sealed interface ParsedMessageNode {
     }
 
     @Composable
-    fun BlockDisplay(textStyle: TextStyle?) {
+    fun BlockDisplay(textStyle: TextStyle?, onClickedEvent: (ParsedMessageNode) -> Unit) {
       val blockShape = RoundedCornerShape(10.dp)
       Box(
         modifier = Modifier
@@ -150,7 +204,7 @@ sealed interface ParsedMessageNode {
           .padding(start = 5.dp, top = 5.dp)
           .clip(blockShape)
           .horizontalScroll(rememberScrollState())
-          .clickable {  }
+          .clickable { onClickedEvent(this) }
       ) {
         if (textStyle != null) {
           Text(modifier = Modifier, text = text, style = textStyle)
@@ -161,18 +215,28 @@ sealed interface ParsedMessageNode {
     }
 
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       if (!isInline) {
-        BlockDisplay(textStyle = textStyle)
+        BlockDisplay(textStyle = textStyle, onClickedEvent)
       } else {
-        InlineDisplay(textStyle = textStyle)
+        InlineDisplay(textStyle = textStyle, onClickedEvent)
       }
     }
   }
 
   data class Paragraph(val text: AnnotatedString) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       if (textStyle != null) {
         Text(modifier = Modifier, text = text, style = textStyle)
       } else {
@@ -182,9 +246,14 @@ sealed interface ParsedMessageNode {
   }
 
   // Normal regular good old text
-  data class Text(val text: AnnotatedString) : ParsedMessageNode {
+  data class TextNode(val text: AnnotatedString) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       if (textStyle != null) {
         Text(modifier = Modifier, text = text, style = textStyle)
       } else {
@@ -196,11 +265,21 @@ sealed interface ParsedMessageNode {
   // Items we can't or just flat out will not parse
   data class Unhandled(val text: String) : ParsedMessageNode {
     @Composable
-    override fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?) {
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
       TODO("Not yet implemented")
     }
   }
 
   @Composable
-  fun Display(modifier: Modifier, isInline: Boolean, textStyle: TextStyle?)
+  fun Display(
+    modifier: Modifier,
+    isInline: Boolean,
+    textStyle: TextStyle?,
+    onClickedEvent: (ParsedMessageNode) -> Unit,
+  )
 }

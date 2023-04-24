@@ -2,6 +2,10 @@ package com.app.radiator.ui.components
 
 import android.annotation.SuppressLint
 import android.icu.text.SimpleDateFormat
+import android.text.SpannableString
+import android.text.style.URLSpan
+import android.text.util.Linkify
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -21,11 +26,13 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.text.util.LinkifyCompat
 import com.app.radiator.matrix.store.AsyncImageStorage
 import com.app.radiator.matrix.store.MxcURI
 import com.app.radiator.matrix.timeline.*
 import com.app.radiator.matrix.timeline.displayName
 import com.app.radiator.ui.routes.avatarData
+import com.app.radiator.ui.theme.LinkColor
 import java.util.*
 
 val preview = TimelineItemVariant.Event(
@@ -94,6 +101,44 @@ fun TestTwoTextFieldsAsNewline() {
   }
 }
 
+val parsedNodeClickHandlerLogger: (node: ParsedMessageNode) -> Unit = {
+  when (it) {
+    is ParsedMessageNode.CodeBlock -> Log.d(
+      "MessageNodeClick",
+      "Clicked code block"
+    )
+
+    is ParsedMessageNode.Heading -> Log.d("MessageNodeClick", "Clicked heading")
+    is ParsedMessageNode.HrefNode -> Log.d(
+      "MessageNodeClick",
+      "Clicked link (URL: ${it.url})"
+    )
+
+    is ParsedMessageNode.ListNode -> Log.d(
+      "MessageNodeClick",
+      "Clicked list item"
+    )
+
+    is ParsedMessageNode.OrderedList -> Log.d(
+      "MessageNodeClick",
+      "Clicked ordered list"
+    )
+
+    is ParsedMessageNode.Paragraph -> Log.d(
+      "MessageNodeClick",
+      "Clicked paragraph"
+    )
+
+    is ParsedMessageNode.Root -> Log.d("MessageNodeClick", "Clicked root")
+    is ParsedMessageNode.TextNode -> {}
+    is ParsedMessageNode.Unhandled -> {}
+    is ParsedMessageNode.UnorderedList -> Log.d(
+      "MessageNodeClick",
+      "Clicked unordered list"
+    )
+  }
+}
+
 @SuppressLint("SimpleDateFormat")
 @OptIn(ExperimentalFoundationApi::class)
 @Preview
@@ -113,13 +158,17 @@ fun RoomMessageItem(
   val coroutineScope = rememberCoroutineScope()
   Box(
     modifier = Modifier
-      .padding(end=10.dp, top=2.dp, bottom=2.dp)
+      .padding(end = 10.dp, top = 2.dp, bottom = 2.dp)
       .fillMaxWidth()
       // .wrapContentHeight()
       .background(color = Color.White),
     contentAlignment = Alignment.CenterStart,
   ) {
-    Row(modifier = Modifier.padding(end=5.dp).fillMaxWidth()) {
+    Row(
+      modifier = Modifier
+        .padding(end = 5.dp)
+        .fillMaxWidth()
+    ) {
       Column() {
         // TODO: user avatar + user name + time stamp display row
         if (!shouldGroup) {
@@ -170,11 +219,18 @@ fun RoomMessageItem(
                       when (val msg = innerItem.message) {
                         is Message.Text -> {
                           if (msg.document != null) {
-                            ReplyItemMessageNode(msg.document,avatarData = innerItem.senderProfile.avatarData(item.sender))
+                            ReplyItemMessageNode(
+                              msg.document,
+                              avatarData = innerItem.senderProfile.avatarData(item.sender)
+                            )
                           } else {
-                            ReplyItem(AnnotatedString(msg.body), avatarData = innerItem.senderProfile.avatarData(item.sender))
+                            ReplyItem(
+                              AnnotatedString(msg.body),
+                              avatarData = innerItem.senderProfile.avatarData(item.sender)
+                            )
                           }
                         }
+
                         else -> {}
                       }
                     }
@@ -186,10 +242,38 @@ fun RoomMessageItem(
                   contentTypeItem.document.Display(
                     modifier = Modifier,
                     isInline = false,
-                    textStyle = null
+                    textStyle = null,
+                    onClickedEvent = parsedNodeClickHandlerLogger
                   )
                 } else {
-                  Text(contentTypeItem.body)
+                  val annotatedString = buildAnnotatedString {
+                    append(contentTypeItem.body)
+                    val textSpan = SpannableString(contentTypeItem.body)
+                    LinkifyCompat.addLinks(textSpan, Linkify.WEB_URLS or Linkify.PHONE_NUMBERS)
+                    for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
+                      val begin = textSpan.getSpanStart(span)
+                      val end = textSpan.getSpanEnd(span)
+                      addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
+                      addStringAnnotation(
+                        tag = "URL",
+                        annotation = span.url,
+                        start = begin,
+                        end = end
+                      )
+                    }
+                  }
+                  val urlHandler = LocalUriHandler.current
+                  Text(
+                    modifier = Modifier.clickable {
+                      val linkItem =
+                        annotatedString.getStringAnnotations("URL", 0, annotatedString.length)
+                          .firstOrNull()?.item
+                      if (linkItem != null) {
+                        urlHandler.openUri(linkItem)
+                      }
+                    },
+                    text = annotatedString
+                  )
                 }
               }
 
@@ -205,6 +289,7 @@ fun RoomMessageItem(
               is Message.RedactedMessage -> {
                 Text("Message deleted", style = TextStyle(color = Color.LightGray))
               }
+
               else -> {
                 Text(contentTypeItem.toString())
               }
