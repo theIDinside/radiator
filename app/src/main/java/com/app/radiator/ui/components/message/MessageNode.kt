@@ -44,7 +44,11 @@ val whiteListedTags = setOf(
 )
 
 // Our own pseudo tree-node structure, we convert it from HTML because HTML isn't great for
-// radiator's purposes.
+// radiator's purposes. These types then signal to to the Jetpack Compose engine how they are supposed
+// to be laid out.
+
+// TODO: we need to account for newlines after tags. Currently, the parser sees them as their own
+//  individual freestanding (Text) nodes, which they shouldn't be.
 sealed interface MessageNode {
     // Container types; holds no text themselves, any text they hold lives in a MessageItem.Text node
     data class Root(val children: List<MessageNode>) : MessageNode
@@ -53,12 +57,11 @@ sealed interface MessageNode {
     data class OrderedList(val list: List<MessageNode>) : MessageNode
     data class Heading(val items: List<MessageNode>) : MessageNode
 
+    // Actual text containers; what in the Javascript DOM sense would be an element's "innerText" property
     data class CodeBlock(val text: AnnotatedString) : MessageNode
     data class Paragraph(val text: AnnotatedString) : MessageNode
-
     // Normal regular good old text
     data class Text(val text: AnnotatedString) : MessageNode
-
     // Items we can't or just flat out will not parse
     data class Unhandled(val text: String) : MessageNode
 }
@@ -282,6 +285,9 @@ class TextNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openT
     }
 }
 
+// TODO(simon): implement plugin functionality where we can inject our own parsing plugins.
+//  one use case would be, when we parse a code block that has `class=language-foo` that we can pass
+//  a plugin that can parse the language foo into an annotated string (i.e. a string that's syntax highlighted)
 class MessageBuilder {
     var rootNode = RootNode(ParsedTag.OpenTag(tagSpan = 0..0, tag = Tag.Root), null)
     fun parse(body: String): MessageNode {
