@@ -66,6 +66,7 @@ sealed interface MessageNode {
 enum class Tag {
     // HTML Elements
     PARAGRAPH, OL, UL, LI, PRE, CODE, H1, H2, H3, H4, H5, H6,
+
     // Our own Pseudo-HTML-elements
     Root, InnerTextNode
 }
@@ -87,19 +88,28 @@ val TagMap = mapOf(
 
 fun findClose(start: Int, input: String): Int = input.indexOf(startIndex = start + 1, char = '>')
 
-sealed class ParsedTag(val start: Int, val tag: Tag, val tagLength: Int) {
-    class OpenTag(start: Int, tag: Tag, tagLen: Int) : ParsedTag(start = start, tag = tag, tagLength = tagLen) {
+typealias TagRangeEndInclusive = ClosedRange<Int>
+
+fun TagRangeEndInclusive.length(): Int {
+    if (start == endInclusive) return 0
+    return 1 + endInclusive - start
+}
+
+sealed class ParsedTag(val tagSpan: TagRangeEndInclusive, val tag: Tag) {
+    class OpenTag(tagSpan: TagRangeEndInclusive, tag: Tag) :
+        ParsedTag(tagSpan = tagSpan, tag = tag) {
         /**
          * Returns position in document past the opening tag (i.e after the '>'). If this tag
          * is one that can hold other child elements, it's not necessary true that the actual inner contents
          * start here; you'd have to query the inner most child element.
          */
         fun innerContentsShouldStart(): Int {
-            return docIdxStart() + tagLength
+            return docIdxStart() + tagSpan.length()
         }
     }
 
-    class CloseTag(start: Int, tag: Tag, tagLen: Int) : ParsedTag(start = start, tag = tag, tagLength = tagLen) {
+    class CloseTag(tagSpan: TagRangeEndInclusive, tag: Tag) :
+        ParsedTag(tagSpan = tagSpan, tag = tag) {
         /**
          * Returns the position before this tag's ending tag, i.e right before </tag>, where 'tag' is p, li, etc
          */
@@ -111,13 +121,13 @@ sealed class ParsedTag(val start: Int, val tag: Tag, val tagLength: Int) {
     /**
      * Returns index into document where this tag begins; i.e the position _at_ <tag> (the first '<')
      */
-    fun docIdxStart(): Int = start
+    fun docIdxStart(): Int = tagSpan.start
 
     /**
      * Returns index into document where this tag ends; i.e the position _after_ </tag>
      */
     fun docIdxEnd(): Int {
-        return docIdxStart() + tagLength
+        return docIdxStart() + tagSpan.length()
     }
 }
 
@@ -125,21 +135,20 @@ sealed class ParsedTag(val start: Int, val tag: Tag, val tagLength: Int) {
 fun parseTag(start: Int, input: String): ParsedTag {
     if (input[start] != '<') throw Exception("start must always equal to the position in input that holds a '<'")
     val end = findClose(start = start, input)
-    val newStart = if (input[start + 1] == '/') start + 1 else start
-    val sub = input.subSequence(newStart + 1, end)
+    // if tag begins with </, it's a closing tag
+    val tagNameStarts = if (input[start + 1] == '/') start + 1 else start
+    val sub = input.subSequence(tagNameStarts + 1, end)
     return try {
         val tag = sub.toTag()
             ?: throw Exception("Parsing tag failed: '$sub' could not be recognized as a tag")
-        if (newStart == start) ParsedTag.OpenTag(
-            tag = tag, start = start, tagLen = (end - start)+1
-        )
-        else ParsedTag.CloseTag(tag = tag, start = start, tagLen = (end - start)+1)
+        val tagSpan = start..end
+        if (tagNameStarts == start) ParsedTag.OpenTag(tagSpan = tagSpan, tag = tag)
+        else ParsedTag.CloseTag(tagSpan = tagSpan, tag = tag)
     } catch (ex: Exception) {
         // if the tag hade classes etc - that's pretty rare though
         val tag = sub.subSequence(0, sub.indexOf(' ')).toTag()!!
-        ParsedTag.OpenTag(
-            tag = tag, start = start, tagLen = (end-start)+1
-        )
+        val tagSpan = start..end
+        ParsedTag.OpenTag(tagSpan = tagSpan, tag = tag)
     }
 }
 
@@ -274,7 +283,7 @@ class TextNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openT
 }
 
 class MessageBuilder {
-    var rootNode = RootNode(ParsedTag.OpenTag(start = 0, tag = Tag.Root, tagLen = 0), null)
+    var rootNode = RootNode(ParsedTag.OpenTag(tagSpan = 0..0, tag = Tag.Root), null)
     fun parse(body: String): MessageNode {
         var currNode: DomNode? = rootNode
         var pos = 0
@@ -285,9 +294,7 @@ class MessageBuilder {
                 if (currentInnerTextNode != null) {
                     currentInnerTextNode.closeTag(
                         ParsedTag.CloseTag(
-                            tag = Tag.InnerTextNode,
-                            start = pos,
-                            tagLen = 0
+                            tag = Tag.InnerTextNode, tagSpan = pos..pos
                         )
                     )
                     currNode?.addNode(currentInnerTextNode)
@@ -308,8 +315,7 @@ class MessageBuilder {
                             Tag.PRE -> PreNode(openTag = tag, parentNode = currNode)
                             Tag.CODE -> CodeblockNode(openTag = tag, parentNode = currNode)
                             Tag.H1, Tag.H2, Tag.H3, Tag.H4, Tag.H5, Tag.H6 -> HeadingNode(
-                                openTag = tag,
-                                parentNode = currNode
+                                openTag = tag, parentNode = currNode
                             )
 
                             Tag.Root -> RootNode(openTag = tag, parentNode = currNode)
@@ -324,21 +330,26 @@ class MessageBuilder {
             } else {
                 if (currentInnerTextNode == null) {
                     currentInnerTextNode = TextNode(
-                        openTag = ParsedTag.OpenTag(tag = Tag.InnerTextNode, start = pos, tagLen = 0),
-                        parentNode = currNode
+                        openTag = ParsedTag.OpenTag(
+                            tag = Tag.InnerTextNode, tagSpan = pos..pos
+                        ), parentNode = currNode
                     )
                 }
                 pos++
             }
         }
         if (currentInnerTextNode != null) {
-            currentInnerTextNode.closeTag(ParsedTag.CloseTag(tag = Tag.InnerTextNode, start = pos, tagLen = 0))
+            currentInnerTextNode.closeTag(
+                ParsedTag.CloseTag(
+                    tag = Tag.InnerTextNode, tagSpan = pos..pos
+                )
+            )
             if (currNode != rootNode) {
                 throw Exception("After parsing document current node should be root node, but it's $currNode")
             }
             currNode.addNode(currentInnerTextNode)
         }
-        rootNode.closeTag(ParsedTag.CloseTag(start = body.length, tag = Tag.Root, tagLen = 0))
+        rootNode.closeTag(ParsedTag.CloseTag(tagSpan = body.length..body.length, tag = Tag.Root))
         return rootNode.build(body)
     }
 }
