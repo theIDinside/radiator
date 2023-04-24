@@ -18,7 +18,7 @@ import org.junit.Assert.*
 class AndroidHtmlParsingTests {
     private fun ParsedMessageNode.countTextNodes(): Int {
         return when(this) {
-            is ParsedMessageNode.Text -> 1
+            is ParsedMessageNode.TextNode -> 1
             is ParsedMessageNode.CodeBlock -> 1
             is ParsedMessageNode.Paragraph -> 1
             is ParsedMessageNode.Heading -> items.fold(0) { acc, it -> acc + it.countTextNodes() }
@@ -27,6 +27,7 @@ class AndroidHtmlParsingTests {
             is ParsedMessageNode.Root -> children.fold(0) { acc, it -> acc + it.countTextNodes() }
             is ParsedMessageNode.Unhandled -> return 0
             is ParsedMessageNode.UnorderedList -> return list.fold(0) { acc, it -> acc + it.countTextNodes() }
+            is ParsedMessageNode.HrefNode -> TODO()
         }
     }
 

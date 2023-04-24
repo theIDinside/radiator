@@ -34,67 +34,67 @@ import androidx.compose.ui.unit.dp
 @Preview
 @Composable
 fun LoadingAnimation(
-    circleColor: Color = Color.Magenta,
-    animationDelay: Int = 1800,
-    size: Dp = 64.dp,
+  circleColor: Color = Color.Magenta,
+  animationDelay: Int = 1800,
+  size: Dp = 64.dp,
 ) {
-    val initialsGradient = Brush.linearGradient(
-        listOf(
-            Color.Red,
-            Color.Green,
-            Color.Blue,
-        ),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
+  val initialsGradient = Brush.linearGradient(
+    listOf(
+      Color.Red,
+      Color.Green,
+      Color.Blue,
+    ),
+    start = Offset.Zero,
+    end = Offset.Infinite
+  )
 
-    val infiniteTransition = rememberInfiniteTransition()
-    val rotateAnimation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = animationDelay / 3,
-                easing = LinearEasing
-            )
-        )
+  val infiniteTransition = rememberInfiniteTransition()
+  val rotateAnimation by infiniteTransition.animateFloat(
+    initialValue = 0f,
+    targetValue = 360f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(
+        durationMillis = animationDelay / 3,
+        easing = LinearEasing
+      )
     )
+  )
 
-    // circle's scale state
-    val circleScale = remember { mutableStateOf(0f) }
-    // animation
-    val circleScaleAnimate = animateFloatAsState(
-        targetValue = circleScale.value,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = animationDelay / 2),
-            repeatMode = RepeatMode.Reverse
-        )
+  // circle's scale state
+  val circleScale = remember { mutableStateOf(0f) }
+  // animation
+  val circleScaleAnimate = animateFloatAsState(
+    targetValue = circleScale.value,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = animationDelay / 2),
+      repeatMode = RepeatMode.Reverse
     )
-    // This is called when the app is launched
-    LaunchedEffect(Unit) {
-        circleScale.value = 1f
-    }
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // animating circle
-        Box(
-            modifier = Modifier
-                .size(size = size)
-                .scale(scale = circleScaleAnimate.value)
-                .rotate(degrees = rotateAnimation)
-                .border(
-                    width = 10.dp,
-                    brush = initialsGradient,
-                    shape = CircleShape
-                )
-                .border(
-                    width = 10.dp,
-                    color = circleColor.copy(alpha = 1 - circleScaleAnimate.value),
-                    shape = CircleShape
-                )
-        )
-    }
+  )
+  // This is called when the app is launched
+  LaunchedEffect(Unit) {
+    circleScale.value = 1f
+  }
+  Column(
+    modifier = Modifier.fillMaxSize(),
+    verticalArrangement = Arrangement.Center,
+    horizontalAlignment = Alignment.CenterHorizontally
+  ) {
+    // animating circle
+    Box(
+      modifier = Modifier
+          .size(size = size)
+          .scale(scale = circleScaleAnimate.value)
+          .rotate(degrees = rotateAnimation)
+          .border(
+              width = 10.dp,
+              brush = initialsGradient,
+              shape = CircleShape
+          )
+          .border(
+              width = 10.dp,
+              color = circleColor.copy(alpha = 1 - circleScaleAnimate.value),
+              shape = CircleShape
+          )
+    )
+  }
 }

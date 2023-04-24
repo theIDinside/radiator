@@ -15,13 +15,14 @@ class HTMLParsingTests  {
 
     private fun ParsedMessageNode.countTextNodes(): Int {
         return when(this) {
-            is ParsedMessageNode.Text, is ParsedMessageNode.CodeBlock, is ParsedMessageNode.Paragraph -> return 1
+            is ParsedMessageNode.TextNode, is ParsedMessageNode.CodeBlock, is ParsedMessageNode.Paragraph -> return 1
             is ParsedMessageNode.Heading -> items.fold(0) { acc, it -> acc + it.countTextNodes() }
             is ParsedMessageNode.ListNode -> items.fold(0) { acc, it -> acc + it.countTextNodes() }
             is ParsedMessageNode.OrderedList -> list.fold(0) { acc, it -> acc + it.countTextNodes() }
             is ParsedMessageNode.Root -> children.fold(0) { acc, it -> acc + it.countTextNodes() }
             is ParsedMessageNode.Unhandled -> return 0
             is ParsedMessageNode.UnorderedList -> return list.fold(0) { acc, it -> acc + it.countTextNodes() }
+            is ParsedMessageNode.HrefNode -> TODO()
         }
     }
 

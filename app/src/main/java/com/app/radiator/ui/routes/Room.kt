@@ -60,8 +60,8 @@ fun RoomRoute(
     Scaffold(content = { padding ->
       LazyColumn(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(padding),
+          .fillMaxSize()
+          .padding(padding),
         state = lazyListState,
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Bottom,
@@ -133,8 +133,8 @@ fun RoomRoute(
           },
           shape = CircleShape,
           modifier = Modifier
-              .align(Alignment.BottomCenter)
-              .size(40.dp),
+            .align(Alignment.BottomCenter)
+            .size(40.dp),
           containerColor = MaterialTheme.colorScheme.surfaceVariant,
           contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ) {

@@ -15,14 +15,14 @@ import kotlinx.collections.immutable.ImmutableCollection
 
 @Composable
 fun RoomList(roomList: ImmutableCollection<RoomSummary>, onClick: (RoomSummary) -> Unit = {}) {
-    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-        roomList.forEach {
-            RoomSummaryRow(room = it, onClick = onClick)
-            Spacer(
-                modifier = Modifier
-                    .height(5.dp)
-                    .border(BorderStroke(width = 1.dp, Color.Green))
-            )
-        }
+  Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+    roomList.forEach {
+      RoomSummaryRow(room = it, onClick = onClick)
+      Spacer(
+        modifier = Modifier
+            .height(5.dp)
+            .border(BorderStroke(width = 1.dp, Color.Green))
+      )
     }
+  }
 }

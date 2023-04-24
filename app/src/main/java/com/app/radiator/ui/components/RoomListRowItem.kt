@@ -28,112 +28,116 @@ val AvatarGradientEnd = Color(0xFFF000E5)
 
 @Immutable
 data class AvatarData(
-    val id: String,
-    val name: String?,
-    val url: String? = null,
+  val id: String,
+  val name: String?,
+  val url: String? = null,
 ) {
-    fun getInitial(): String {
-        val firstChar = name?.firstOrNull() ?: id.getOrNull(1) ?: '?'
-        return firstChar.uppercase()
-    }
+  fun getInitial(): String {
+    val firstChar = name?.firstOrNull() ?: id.getOrNull(1) ?: '?'
+    return firstChar.uppercase()
+  }
 }
 
 fun avatarData(slidingSyncRoom: SlidingSyncRoom): AvatarData {
-    return AvatarData(id = slidingSyncRoom.roomId(), name = slidingSyncRoom.name(), url = slidingSyncRoom.avatarUrl())
+  return AvatarData(
+    id = slidingSyncRoom.roomId(),
+    name = slidingSyncRoom.name(),
+    url = slidingSyncRoom.avatarUrl()
+  )
 }
 
 @Immutable
 data class RoomSummary(
-    val id: Int,
-    val roomId: String,
-    val name: String = "",
-    val hasUnread: Boolean = false,
-    val timestamp: String? = null,
-    val lastMessage: AnnotatedString,
-    val avatarData: AvatarData = AvatarData(roomId, name),
-    val isPlaceholder: Boolean = false,
+  val id: Int,
+  val roomId: String,
+  val name: String = "",
+  val hasUnread: Boolean = false,
+  val timestamp: String? = null,
+  val lastMessage: AnnotatedString,
+  val avatarData: AvatarData = AvatarData(roomId, name),
+  val isPlaceholder: Boolean = false,
 )
 
 @Composable
 internal fun RoomSummaryRow(
-    room: RoomSummary,
-    modifier: Modifier = Modifier,
-    onClick: (RoomSummary) -> Unit = {},
+  room: RoomSummary,
+  modifier: Modifier = Modifier,
+  onClick: (RoomSummary) -> Unit = {},
 ) {
-    val clickModifier = if (room.isPlaceholder) {
-        modifier
-    } else {
-        modifier.clickable(
-            onClick = { onClick(room) },
-            indication = rememberRipple(),
-            interactionSource = remember { MutableInteractionSource() }
-        )
-    }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = minHeight)
-            .then(clickModifier)
-    ) {
-        DefaultRoomSummaryRow(room = room)
-    }
+  val clickModifier = if (room.isPlaceholder) {
+    modifier
+  } else {
+    modifier.clickable(
+      onClick = { onClick(room) },
+      indication = rememberRipple(),
+      interactionSource = remember { MutableInteractionSource() }
+    )
+  }
+  Box(
+    modifier = modifier
+        .fillMaxWidth()
+        .heightIn(min = minHeight)
+        .then(clickModifier)
+  ) {
+    DefaultRoomSummaryRow(room = room)
+  }
 }
 
 @Composable
 internal fun DefaultRoomSummaryRow(
-    room: RoomSummary,
+  room: RoomSummary,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(IntrinsicSize.Min),
-        verticalAlignment = CenterVertically
+  Row(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp)
+        .height(IntrinsicSize.Min),
+    verticalAlignment = CenterVertically
+  ) {
+    Avatar(avatarData = room.avatarData)
+    Column(
+      modifier = Modifier
+          .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)
+          .alignByBaseline()
+          .weight(1f)
     ) {
-        Avatar(avatarData = room.avatarData)
-        Column(
-            modifier = Modifier
-                .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)
-                .alignByBaseline()
-                .weight(1f)
-        ) {
-            // Name
-            Text(
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                text = room.name,
-                color = SystemGreyLight,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            // Last Message
-            Text(
-                text = room.lastMessage,
-                color = Azure,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        // Timestamp and Unread
-        Column(
-            modifier = Modifier
-                .alignByBaseline(),
-        ) {
-            Text(
-                fontSize = 12.sp,
-                text = room.timestamp ?: "",
-                color = Azure,
-            )
-            Spacer(Modifier.size(4.dp))
-            val unreadIndicatorColor = if (room.hasUnread) Polly else Color.Transparent
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(unreadIndicatorColor)
-                    .align(Alignment.End),
-            )
-        }
+      // Name
+      Text(
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        text = room.name,
+        color = SystemGreyLight,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+      // Last Message
+      Text(
+        text = room.lastMessage,
+        color = Azure,
+        fontSize = 10.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
     }
+    // Timestamp and Unread
+    Column(
+      modifier = Modifier
+        .alignByBaseline(),
+    ) {
+      Text(
+        fontSize = 12.sp,
+        text = room.timestamp ?: "",
+        color = Azure,
+      )
+      Spacer(Modifier.size(4.dp))
+      val unreadIndicatorColor = if (room.hasUnread) Polly else Color.Transparent
+      Box(
+        modifier = Modifier
+            .size(12.dp)
+            .clip(CircleShape)
+            .background(unreadIndicatorColor)
+            .align(Alignment.End),
+      )
+    }
+  }
 }

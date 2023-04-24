@@ -4,56 +4,56 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 
 object RadiatorTheme {
-    val colors: RadiatorThemeColors
-        @Composable
-        @ReadOnlyComposable
-        get() = radiatorThemeColorsSetting.current
+  val colors: RadiatorThemeColors
+    @Composable
+    @ReadOnlyComposable
+    get() = radiatorThemeColorsSetting.current
 }
 
 val radiatorThemeColorsSetting = staticCompositionLocalOf { lightRadiatorTheme }
 
 @Stable
 class RadiatorThemeColors(
-    buttonIconTint: Color,
-    messageFromMeBackground: Color,
-    messageFromOtherBackground: Color,
-    messageHighlightedBackground: Color,
-    quaternary: Color,
-    quinary: Color,
-    textActionCritical: Color,
-    isLight: Boolean,
+  buttonIconTint: Color,
+  messageFromMeBackground: Color,
+  messageFromOtherBackground: Color,
+  messageHighlightedBackground: Color,
+  quaternary: Color,
+  quinary: Color,
+  textActionCritical: Color,
+  isLight: Boolean,
 ) {
 
-    var buttonIconTint by mutableStateOf(buttonIconTint)
-        private set
-    var messageFromMeBackground by mutableStateOf(messageFromMeBackground)
-        private set
-    var messageFromOtherBackground by mutableStateOf(messageFromOtherBackground)
-        private set
-    var messageHighlightedBackground by mutableStateOf(messageHighlightedBackground)
-        private set
+  var buttonIconTint by mutableStateOf(buttonIconTint)
+    private set
+  var messageFromMeBackground by mutableStateOf(messageFromMeBackground)
+    private set
+  var messageFromOtherBackground by mutableStateOf(messageFromOtherBackground)
+    private set
+  var messageHighlightedBackground by mutableStateOf(messageHighlightedBackground)
+    private set
 
-    var quaternary by mutableStateOf(quaternary)
-        private set
+  var quaternary by mutableStateOf(quaternary)
+    private set
 
-    var quinary by mutableStateOf(quinary)
-        private set
+  var quinary by mutableStateOf(quinary)
+    private set
 
-    var textActionCritical by mutableStateOf(textActionCritical)
-        private set
+  var textActionCritical by mutableStateOf(textActionCritical)
+    private set
 
-    var isLight by mutableStateOf(isLight)
-        private set
+  var isLight by mutableStateOf(isLight)
+    private set
 
-    fun updateColorsFrom(other: RadiatorThemeColors) {
-        messageFromMeBackground = other.messageFromMeBackground
-        messageFromOtherBackground = other.messageFromOtherBackground
-        messageHighlightedBackground = other.messageHighlightedBackground
-        quaternary = other.quaternary
-        quinary = other.quinary
-        textActionCritical = other.textActionCritical
-        isLight = other.isLight
-    }
+  fun updateColorsFrom(other: RadiatorThemeColors) {
+    messageFromMeBackground = other.messageFromMeBackground
+    messageFromOtherBackground = other.messageFromOtherBackground
+    messageHighlightedBackground = other.messageHighlightedBackground
+    quaternary = other.quaternary
+    quinary = other.quinary
+    textActionCritical = other.textActionCritical
+    isLight = other.isLight
+  }
 }
 
 val Purple80 = Color(0xFFD0BCFF)
@@ -110,12 +110,12 @@ val TextColorCriticalLight = Color(0xFFD51928)
 val TextColorCriticalDark = Color(0xfffd3e3c)
 
 val lightRadiatorTheme = RadiatorThemeColors(
-    messageFromMeBackground = SystemGrey5Light,
-    messageFromOtherBackground = SystemGrey6Light,
-    messageHighlightedBackground = Azure,
-    quaternary = Gray_100,
-    quinary = Gray_50,
-    textActionCritical = TextColorCriticalLight,
-    isLight = true,
-    buttonIconTint = Gray_250
+  messageFromMeBackground = SystemGrey5Light,
+  messageFromOtherBackground = SystemGrey6Light,
+  messageHighlightedBackground = Azure,
+  quaternary = Gray_100,
+  quinary = Gray_50,
+  textActionCritical = TextColorCriticalLight,
+  isLight = true,
+  buttonIconTint = Gray_250
 )

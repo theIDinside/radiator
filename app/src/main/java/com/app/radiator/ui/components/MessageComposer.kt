@@ -42,78 +42,78 @@ import androidx.compose.ui.unit.dp
 @Preview
 @Composable
 fun MessageComposer(
-    modifier: Modifier = Modifier,
-    sendMessageOp: (String) -> Unit = { Log.w("MessageComposer", "Send message not implemented") },
+  modifier: Modifier = Modifier,
+  sendMessageOp: (String) -> Unit = { Log.w("MessageComposer", "Send message not implemented") },
 ) {
-    val (messageInput, setMessage) = remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val mContext = LocalContext.current
-    fun sendMessage() {
-        sendMessageOp(messageInput)
-    }
+  val (messageInput, setMessage) = remember { mutableStateOf("") }
+  val keyboardController = LocalSoftwareKeyboardController.current
+  val mContext = LocalContext.current
+  fun sendMessage() {
+    sendMessageOp(messageInput)
+  }
 
-    fun showAddOnToMessage() {
-        Toast.makeText(mContext, "Add images, links, etc...", Toast.LENGTH_LONG).show()
-    }
+  fun showAddOnToMessage() {
+    Toast.makeText(mContext, "Add images, links, etc...", Toast.LENGTH_LONG).show()
+  }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // .border(width = 2.dp, color = Color.Gray)
-            .background(color = Color.White),
-        verticalAlignment = Alignment.CenterVertically
+  Row(
+    modifier = Modifier
+        .fillMaxWidth()
+        // .border(width = 2.dp, color = Color.Gray)
+        .background(color = Color.White),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Box(
+      modifier = Modifier,
+      contentAlignment = Alignment.Center,
+      propagateMinConstraints = true
     ) {
-        Box(
-            modifier = Modifier,
-            contentAlignment = Alignment.Center,
-            propagateMinConstraints = true
-        ) {
-            Row(modifier = Modifier, horizontalArrangement = Arrangement.Center) {
-                Spacer(modifier = Modifier.width(10.dp))
-                Button(
-                    modifier = Modifier
-                        .background(color = Color.White)
-                        .size(35.dp)
-                        .offset(x = 2.5.dp),
-                    onClick = { showAddOnToMessage() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.LightGray,
-                        contentColor = Color.Black,
-                        disabledContainerColor = Color.Gray,
-                        disabledContentColor = Color.Gray
-                    ),
-                    contentPadding = PaddingValues(0.dp),
-                    shape = CircleShape
-                )
-                {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = "content description",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
+      Row(modifier = Modifier, horizontalArrangement = Arrangement.Center) {
+        Spacer(modifier = Modifier.width(10.dp))
+        Button(
+          modifier = Modifier
+              .background(color = Color.White)
+              .size(35.dp)
+              .offset(x = 2.5.dp),
+          onClick = { showAddOnToMessage() },
+          colors = ButtonDefaults.buttonColors(
+            containerColor = Color.LightGray,
+            contentColor = Color.Black,
+            disabledContainerColor = Color.Gray,
+            disabledContentColor = Color.Gray
+          ),
+          contentPadding = PaddingValues(0.dp),
+          shape = CircleShape
+        )
+        {
+          Icon(
+            Icons.Default.Add,
+            contentDescription = "content description",
+            tint = MaterialTheme.colorScheme.primary
+          )
         }
-        Spacer(modifier = Modifier.width(15.dp))
-        Box(modifier = Modifier.padding(top = 5.dp, bottom = 5.dp, end = 5.dp)) {
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = messageInput,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White
-                ),
-                onValueChange = setMessage,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        sendMessage()
-                        setMessage("")
-                        keyboardController?.hide()
-                    }),
-                // placeholder = {  },
-                label = { Text("Message...") }
-            )
-        }
+      }
     }
+    Spacer(modifier = Modifier.width(15.dp))
+    Box(modifier = Modifier.padding(top = 5.dp, bottom = 5.dp, end = 5.dp)) {
+      OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = messageInput,
+        colors = TextFieldDefaults.colors(
+          focusedContainerColor = Color.White,
+          unfocusedContainerColor = Color.White
+        ),
+        onValueChange = setMessage,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+        keyboardActions = KeyboardActions(
+          onSend = {
+            sendMessage()
+            setMessage("")
+            keyboardController?.hide()
+          }),
+        // placeholder = {  },
+        label = { Text("Message...") }
+      )
+    }
+  }
 }

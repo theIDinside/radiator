@@ -74,9 +74,7 @@ class MainActivity : ComponentActivity() {
                   coroutineScope.launch {
                     authenticationService.configureHomeserver("matrix.org")
                     matrixClient.login(
-                      authService = authenticationService,
-                      userName = userId,
-                      password = password
+                      authService = authenticationService, userName = userId, password = password
                     )
                   }
                   navController.navigate(route = Routes.RoomList.route)
@@ -87,14 +85,13 @@ class MainActivity : ComponentActivity() {
 
             composable(Routes.RoomList.route) {
               println("Room list compose")
-              val rooms = matrixClient.slidingSyncListener.summaryFlow()
-                .collectAsState(initial = emptyList())
+              val rooms =
+                matrixClient.slidingSyncListener.summaryFlow().collectAsState(initial = emptyList())
 
               if (rooms.value.isNotEmpty()) {
-                RoomList(roomList = rooms.value.toImmutableList(),
-                  onClick = { summary ->
-                    navController.navigate(Routes.Room.route + "/${summary.roomId}")
-                  })
+                RoomList(roomList = rooms.value.toImmutableList(), onClick = { summary ->
+                  navController.navigate(Routes.Room.route + "/${summary.roomId}")
+                })
               } else {
                 LoadingAnimation(size = 168.dp)
               }
