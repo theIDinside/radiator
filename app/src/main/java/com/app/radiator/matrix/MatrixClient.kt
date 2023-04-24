@@ -495,7 +495,8 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
         val slidingSync = client
             .slidingSync()
             .homeserver("https://slidingsync.lab.matrix.org")
-            .withCommonExtensions()
+            .withAllExtensions()
+            // .withCommonExtensions()
             .storageKey("syncStorage")
             .addList(slidingSyncList)
             .use {

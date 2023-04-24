@@ -2,6 +2,8 @@ package com.app.radiator.matrix.timeline
 
 import android.util.Log
 import androidx.compose.runtime.*
+import com.app.radiator.matrix.htmlparse.HTMLParser
+import com.app.radiator.ui.components.ParsedMessageNode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,27 +66,30 @@ interface RepliedToEventDetails {
     object Unavailable : RepliedToEventDetails
 }
 
-fun FFIRepliedToEventDetails.marshal(): RepliedToEventDetails {
+fun FFIRepliedToEventDetails.marshal(room: Room, eventId: String?): RepliedToEventDetails {
     return when (this) {
         is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Error -> RepliedToEventDetails.Error(
             message
         )
 
         is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Ready -> RepliedToEventDetails.Ready(
-            message = message.use { it.marshal() },
+            message = message.use { it.marshal(room=room, thisEventId = eventId) },
             sender = sender,
             senderProfile = senderProfile.marshal()
         )
 
-        org.matrix.rustcomponents.sdk.RepliedToEventDetails.Unavailable -> RepliedToEventDetails.Unavailable
+        org.matrix.rustcomponents.sdk.RepliedToEventDetails.Unavailable -> {
+            room.fetchEventDetails(eventId!!)
+            RepliedToEventDetails.Unavailable
+        }
         org.matrix.rustcomponents.sdk.RepliedToEventDetails.Pending -> RepliedToEventDetails.Pending
     }
 }
 
 data class InReplyToDetails(val event: RepliedToEventDetails, val eventId: String)
 
-fun FFIInReplyToDetails.marshal(): InReplyToDetails =
-    InReplyToDetails(event = event.marshal(), eventId = eventId)
+fun FFIInReplyToDetails.marshal(thisEventId: String?, room: Room): InReplyToDetails =
+    InReplyToDetails(event = event.marshal(room=room, thisEventId), eventId = eventId)
 
 interface EventSendState {
     object NotSendYet : EventSendState
@@ -300,6 +305,7 @@ interface Message {
         val inReplyTo: InReplyToDetails?,
         val isEdited: Boolean,
         val formatted: FormattedBody?,
+        val document: ParsedMessageNode? = null
     ) : Message
 
     @Immutable
@@ -428,7 +434,7 @@ fun org.matrix.rustcomponents.sdk.EventSendState.marshal(): EventSendState = whe
     is org.matrix.rustcomponents.sdk.EventSendState.Sent -> EventSendState.Sent(this.eventId)
 }
 
-private fun EventTimelineItem.marshal(lastUserSeen: String?): TimelineItemVariant.Event {
+private fun EventTimelineItem.marshal(lastUserSeen: String?, room: Room): TimelineItemVariant.Event {
     val sender = this.sender()
     val continuous = lastUserSeen?.equals(sender) ?: false
     return TimelineItemVariant.Event(
@@ -440,65 +446,78 @@ private fun EventTimelineItem.marshal(lastUserSeen: String?): TimelineItemVarian
         isOwn = this.isOwn(),
         isRemote = this.isRemote(),
         localSendState = this.localSendState()?.marshal(),
-        reactions = this.reactions()?.map { Reaction(it.key, it.count) }.orEmpty(),
+        reactions = this.reactions().map { Reaction(it.key, it.count) },
         sender = sender,
         senderProfile = this.senderProfile().marshal(),
         timestamp = this.timestamp(),
-        message = this.content().use { it.marshal() },
+        message = this.content().use { it.marshal(this.eventId(), room) },
         groupedByUser = continuous
     )
 }
 
-fun FFIMessage.marshal(): Message {
+val messageBuilder = HTMLParser()
+
+fun FFIMessage.marshal(thisEventId: String?, room: Room): Message {
     return when (val msgType = msgtype()!!) {
         is MessageType.Audio -> Message.Audio(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
+            inReplyTo = inReplyTo()?.use { it.marshal(room=room, thisEventId = thisEventId) },
             isEdited = isEdited(),
             info = msgType.content.info,
             source = msgType.content.source.use { it.url() })
 
         is MessageType.Emote -> Message.Emote(
             body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
+            inReplyTo = inReplyTo()?.use { it.marshal(room=room, thisEventId = thisEventId) },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
 
         is MessageType.File -> Message.File(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
+            inReplyTo = inReplyTo()?.use { it.marshal(room=room, thisEventId = thisEventId) },
             isEdited = isEdited(),
             info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
 
         is MessageType.Image -> Message.Image(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
+            inReplyTo = inReplyTo()?.use { it.marshal(room=room, thisEventId = thisEventId) },
             isEdited = isEdited(),
             info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
 
         is MessageType.Notice -> Message.Notice(
             body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
+            inReplyTo = inReplyTo()?.use { it.marshal(room=room, thisEventId = thisEventId) },
             isEdited = isEdited(),
             formatted = msgType.content.formatted?.copy()
         )
-
-        is MessageType.Text -> Message.Text(
-            body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
-            isEdited = isEdited(),
-            formatted = msgType.content.formatted?.copy()
-        )
+        is MessageType.Text -> {
+            val mxStripped = stripMxReplyBlock(msgType.content.formatted?.copy())
+            val doc = if(msgType.content.formatted != null) {
+                messageBuilder.parse(mxStripped!!.body)
+            } else null
+            Message.Text(
+                body = body(),
+                inReplyTo = inReplyTo()?.use { it.marshal(thisEventId=thisEventId, room=room) },
+                isEdited = isEdited(),
+                formatted = mxStripped,
+                document = doc
+            )
+        }
 
         is MessageType.Video -> Message.Video(body = body(),
-            inReplyTo = inReplyTo()?.use { it.marshal() },
+            inReplyTo = inReplyTo()?.use { it.marshal(room=room, thisEventId = thisEventId) },
             isEdited = isEdited(),
             info = msgType.content.info?.marshal(),
             source = msgType.content.source.use { it.url() })
     }
 }
 
-private fun TimelineItemContent.marshal(): Message {
+fun stripMxReplyBlock(copy: FormattedBody?): FormattedBody? {
+    if(copy == null) return null
+    return copy.copy(body = copy.body.substringAfter("</mx-reply>"))
+}
+
+private fun TimelineItemContent.marshal(thisEventId: String?, room: Room): Message {
     return when (val kind = this.kind()) {
         is TimelineItemContentKind.FailedToParseMessageLike -> Message.FailedToParseMessageLike(
             eventType = kind.eventType, error = kind.error
@@ -530,7 +549,7 @@ private fun TimelineItemContent.marshal(): Message {
         is TimelineItemContentKind.UnableToDecrypt -> Message.UnableToDecrypt(msg = kind.msg)
         TimelineItemContentKind.Message -> {
             val message = this.asMessage()!!
-            return message.marshal()
+            return message.marshal(thisEventId, room=room)
         }
 
         TimelineItemContentKind.RedactedMessage -> Message.RedactedMessage
@@ -559,6 +578,7 @@ class TimelineState(
     private lateinit var taskHandle: TaskHandle
     private val timelineStateRange =
         MutableStateFlow(CanRequestMoreState(hasMore = true, isLoading = false))
+    val oldRoom = slidingSyncRoom.fullRoom()!!
 
     init {
         val roomSubscription =
@@ -569,7 +589,7 @@ class TimelineState(
                 this@TimelineState, roomSubscription
             )
             val initList = result.items.map { ti ->
-                val item = takeMap(ti, lastUserSeen = senderId)
+                val item = takeMap(ti, lastUserSeen = senderId, oldRoom)
                 senderId = item.sender()
                 item
             }.toList()
@@ -635,9 +655,10 @@ class TimelineState(
     private fun takeMap(
         item: TimelineItem,
         lastUserSeen: String?,
+        room: Room
     ): TimelineItemVariant = item.use {
 
-        it.asEvent()?.marshal(lastUserSeen)?.let { i -> return i }
+        it.asEvent()?.marshal(lastUserSeen, room=room)?.let { i -> return i }
 
         it.asVirtual()?.let { asVirtual ->
             val id = (0..Int.MAX_VALUE).random()
@@ -664,21 +685,22 @@ class TimelineState(
 
     private fun MutableList<TimelineItemVariant>.patchDiff(diff: TimelineDiff) {
         // apply diff
+        Log.d("TimelineDiff", "Patching diff $diff")
         when (diff.change()) {
             TimelineChange.APPEND -> {
                 val append =
-                    diff.append()?.map { takeMap(it, this.lastOrNull()?.sender()) }.orEmpty()
+                    diff.append()?.map { takeMap(it, lastUserSeen=this.lastOrNull()?.sender(), room=oldRoom) }.orEmpty()
                 addAll(append)
             }
 
             TimelineChange.CLEAR -> clear()
             TimelineChange.INSERT -> diff.insert()?.use {
-                add(it.index.toInt(), takeMap(it.item, null))
+                add(it.index.toInt(), takeMap(it.item, lastUserSeen=null, room=oldRoom))
             }
 
             TimelineChange.SET -> diff.set()?.use {
                 val idx = it.index.toInt()
-                set(idx, takeMap(it.item, this.getOrNull(idx - 1)?.sender()))
+                set(idx, takeMap(it.item, lastUserSeen = this.getOrNull(idx - 1)?.sender(), room = oldRoom))
                 val shouldNotGroup: (String?, String?) -> Boolean = { a, b ->
                     a != b && (a != null && b != null)
                 }
@@ -695,11 +717,11 @@ class TimelineState(
             }
 
             TimelineChange.PUSH_BACK -> diff.pushBack()?.use {
-                add(takeMap(it, lastOrNull()?.sender()))
+                add(takeMap(it, lastUserSeen = lastOrNull()?.sender(), room=oldRoom))
             }
 
             TimelineChange.PUSH_FRONT -> diff.pushFront()?.use {
-                val item = takeMap(it, null)
+                val item = takeMap(it, lastUserSeen=null, room=oldRoom)
                 firstOrNull()?.let { first ->
                     if (first is TimelineItemVariant.Event && first.sender == item.sender()) {
                         this[0] = first.copy(groupedByUser = true)
@@ -717,7 +739,7 @@ class TimelineState(
                 clear()
                 var senderId: String? = null
                 addAll(items.map {
-                    val item = takeMap(it, senderId)
+                    val item = takeMap(it, lastUserSeen=senderId, room=oldRoom)
                     senderId = item.sender()
                     item
                 })
