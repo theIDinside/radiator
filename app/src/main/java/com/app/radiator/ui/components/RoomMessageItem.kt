@@ -7,21 +7,32 @@ import android.text.style.URLSpan
 import android.text.util.Linkify
 import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -156,6 +167,7 @@ fun RoomMessageItem(
   isMe: Boolean = false,
 ) {
   val coroutineScope = rememberCoroutineScope()
+  val interactionSource = remember { MutableInteractionSource() }
   Box(
     modifier = Modifier
       .padding(end = 10.dp, top = 2.dp, bottom = 2.dp)
@@ -195,9 +207,12 @@ fun RoomMessageItem(
         Row(
           modifier = Modifier
             .offset(RoomViewLeftOffset)
-            .clickable { },
-          // kept on for debugging purposes
-          // .border(width = 1.dp, color = Color.Black)
+            .clickable(
+              enabled = true,
+              interactionSource = interactionSource,
+              indication = LocalIndication.current,
+              onClick = onClick
+            ),
           horizontalArrangement = Arrangement.Center,
           verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -210,71 +225,15 @@ fun RoomMessageItem(
           }
           Text(text = messageTimeStamp, fontSize = 8.sp)
           Spacer(modifier = Modifier.width(10.dp))
-          Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+          Column() {
             when (val contentTypeItem = item.message) {
               is Message.Text -> {
-                if (contentTypeItem.inReplyTo != null) {
-                  when (val innerItem = contentTypeItem.inReplyTo.event) {
-                    is RepliedToEventDetails.Ready -> {
-                      when (val msg = innerItem.message) {
-                        is Message.Text -> {
-                          if (msg.document != null) {
-                            ReplyItemMessageNode(
-                              msg.document,
-                              avatarData = innerItem.senderProfile.avatarData(item.sender)
-                            )
-                          } else {
-                            ReplyItem(
-                              AnnotatedString(msg.body),
-                              avatarData = innerItem.senderProfile.avatarData(item.sender)
-                            )
-                          }
-                        }
-
-                        else -> {}
-                      }
-                    }
-
-                    is RepliedToEventDetails.Unavailable -> {}
-                  }
-                }
-                if (contentTypeItem.document != null) {
-                  contentTypeItem.document.Display(
-                    modifier = Modifier,
-                    isInline = false,
-                    textStyle = null,
-                    onClickedEvent = parsedNodeClickHandlerLogger
-                  )
-                } else {
-                  val annotatedString = buildAnnotatedString {
-                    append(contentTypeItem.body)
-                    val textSpan = SpannableString(contentTypeItem.body)
-                    LinkifyCompat.addLinks(textSpan, Linkify.WEB_URLS or Linkify.PHONE_NUMBERS)
-                    for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
-                      val begin = textSpan.getSpanStart(span)
-                      val end = textSpan.getSpanEnd(span)
-                      addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
-                      addStringAnnotation(
-                        tag = "URL",
-                        annotation = span.url,
-                        start = begin,
-                        end = end
-                      )
-                    }
-                  }
-                  val urlHandler = LocalUriHandler.current
-                  Text(
-                    modifier = Modifier.clickable {
-                      val linkItem =
-                        annotatedString.getStringAnnotations("URL", 0, annotatedString.length)
-                          .firstOrNull()?.item
-                      if (linkItem != null) {
-                        urlHandler.openUri(linkItem)
-                      }
-                    },
-                    text = annotatedString
-                  )
-                }
+                RoomTextMessage(
+                  sender = item.sender,
+                  textMsg = contentTypeItem,
+                  onClick = onClick,
+                  interactionSource = interactionSource
+                )
               }
 
               is Message.Image -> {
@@ -290,6 +249,12 @@ fun RoomMessageItem(
                 Text("Message deleted", style = TextStyle(color = Color.LightGray))
               }
 
+              is Message.ProfileChange -> {}
+              is Message.RoomMembership -> RoomMembership(msg = contentTypeItem)
+              is Message.State ->
+                contentTypeItem.content.displayText(item.sender)?.let {
+                  SubtleRoomNotification(text = it)
+                }
               else -> {
                 Text(contentTypeItem.toString())
               }
@@ -299,6 +264,112 @@ fun RoomMessageItem(
       }
     }
   }
+}
+
+@Composable
+fun RoomTextMessage(
+  sender: String,
+  textMsg: Message.Text,
+  onClick: () -> Unit,
+  interactionSource: MutableInteractionSource,
+) {
+  if (textMsg.inReplyTo != null) {
+    when (val innerItem = textMsg.inReplyTo.event) {
+      is RepliedToEventDetails.Ready -> {
+        when (val msg = innerItem.message) {
+          is Message.Text -> {
+            if (msg.document != null) {
+              ReplyItemMessageNode(
+                msg.document,
+                avatarData = innerItem.senderProfile.avatarData(sender)
+              )
+            } else {
+              ReplyItem(
+                AnnotatedString(msg.body),
+                avatarData = innerItem.senderProfile.avatarData(sender)
+              )
+            }
+          }
+
+          else -> {}
+        }
+      }
+
+      is RepliedToEventDetails.Unavailable -> {}
+    }
+  }
+  if (textMsg.document != null) {
+    textMsg.document.Display(
+      modifier = Modifier,
+      isInline = false,
+      textStyle = null,
+      onClickedEvent = parsedNodeClickHandlerLogger
+    )
+  } else {
+    val annotatedString = buildAnnotatedString {
+      append(textMsg.body)
+      val textSpan = SpannableString(textMsg.body)
+      LinkifyCompat.addLinks(textSpan, Linkify.WEB_URLS or Linkify.PHONE_NUMBERS)
+      for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
+        val begin = textSpan.getSpanStart(span)
+        val end = textSpan.getSpanEnd(span)
+        addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
+        addStringAnnotation(
+          tag = "URL",
+          annotation = span.url,
+          start = begin,
+          end = end
+        )
+      }
+    }
+
+    val urlHandler = LocalUriHandler.current
+    val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
+
+    val pointerInput: suspend PointerInputScope.() -> Unit = {
+      detectTapGestures(
+        onPress = { offset: Offset ->
+          val pressInteraction = PressInteraction.Press(offset)
+          interactionSource.emit(pressInteraction)
+          val isReleased = tryAwaitRelease()
+          if (isReleased) {
+            interactionSource.emit(PressInteraction.Release(pressInteraction))
+          } else {
+            interactionSource.emit(PressInteraction.Cancel(pressInteraction))
+          }
+        },
+        onTap = { offset ->
+          layoutResult.value?.let {
+            val position = it.getOffsetForPosition(offset)
+            annotatedString
+              .getStringAnnotations(position, position)
+              .firstOrNull()
+              ?.let { span ->
+                urlHandler.openUri(span.item)
+              }
+          } ?: run {
+            onClick()
+          }
+        })
+    }
+
+    Text(
+      modifier = Modifier
+        .pointerInput(onClick, block = pointerInput),
+      text = annotatedString,
+      onTextLayout = { layoutResult.value = it }
+    )
+  }
+}
+
+@Composable
+fun RoomMembership(msg: Message.RoomMembership) {
+  SubtleRoomNotification(text = "${msg.userId} ${msg.change?.name?.lowercase(Locale.getDefault())}")
+}
+
+@Composable
+fun SubtleRoomNotification(text: String) {
+  Text(text = text, fontSize = 12.sp, fontStyle = FontStyle.Italic, color = Color.LightGray)
 }
 
 @Preview

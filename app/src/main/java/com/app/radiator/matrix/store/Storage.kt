@@ -32,11 +32,6 @@ data class CompressedAvatarData(
   val data: ByteArray,
   val uncompressedSize: Int,
 ) {
-  /**
-   * @param latestKnownUrl Responsibility on caller to that this is the latest correct URL to
-   * validate if this object contains the correct data
-   */
-  fun isValid(latestKnownUrl: String): Boolean = avatarUrl == latestKnownUrl
 
   fun decompress(): ImageBitmap {
     val inflater = Inflater()

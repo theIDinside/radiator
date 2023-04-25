@@ -28,3 +28,5 @@ serializing function. You do _not_ need to pull in a 3rd party dep to write a fe
  - Add more README content, the usual suspects stuff
  - Update login UI to not look like shit
  - And everything else...
+ - What is `android:launchMode="singleInstance"`
+ - What is `android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"`

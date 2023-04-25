@@ -1,5 +1,6 @@
 package com.app.radiator.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,7 +64,11 @@ fun ReplyItem(
   Box(
     modifier = Modifier
       .fillMaxWidth()
+      .clickable {
+        Log.i("ReplyItemClicked", "ReplyItemClicked")
+      }
       .background(color = Color.White)
+      .padding(bottom = 5.dp)
   ) {
     Row() {
       Column(Modifier.height(IntrinsicSize.Max), horizontalAlignment = Alignment.Start) {
@@ -127,47 +132,50 @@ fun ReplyItemMessageNode(
     modifier = Modifier
       .fillMaxWidth()
       .background(color = Color.White)
+      .clickable {
+        Log.i("ReplyItemMessageNodeClicked", "ReplyItemMessageNodeClicked")
+      }
   ) {
     Row() {
-      Column(Modifier.height(IntrinsicSize.Max), horizontalAlignment = Alignment.Start) {
-        Column(
-          modifier = Modifier
-            .background(
-              color = Color.White,
-              shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 4.dp)
+      Column(
+        modifier = Modifier
+          .background(
+            color = Color.White,
+            shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 4.dp)
+          )
+          .padding(start = 15.dp)
+          .drawBehind {
+            val borderSize = 2.dp.toPx()
+            drawLine(
+              color = Color.Black,
+              start = Offset(-5f, 0f),
+              end = Offset(-5f, size.height),
+              strokeWidth = borderSize
             )
-            .padding(start = 15.dp)
-            .drawBehind {
-              val borderSize = 2.dp.toPx()
-              drawLine(
-                color = Color.Black,
-                start = Offset(-5f, 0f),
-                end = Offset(-5f, size.height),
-                strokeWidth = borderSize
-              )
-            }
-        ) {
-          Row(modifier = Modifier.padding(start = 5.dp, top = 3.dp)) {
-            Text(modifier = Modifier.clickable { onClickInReplyTo() }, text = InReplyToText)
-            Card(
-              modifier = Modifier.clickable { onClickUserRepliedTo() },
-              shape = RoundedCornerShape(9.dp),
-              elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
+          }
+      ) {
+        Row(modifier = Modifier.padding(start = 5.dp, top = 3.dp)) {
+          Text(modifier = Modifier.clickable { onClickInReplyTo() }, text = InReplyToText)
+          Card(
+            modifier = Modifier.clickable { onClickUserRepliedTo() },
+            shape = RoundedCornerShape(9.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
+          ) {
+            Row(
+              modifier = Modifier,
+              horizontalArrangement = Arrangement.Center,
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              Row(
-                modifier = Modifier,
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Spacer(Modifier.width(2.dp))
-                if (avatarData != null)
-                  Avatar(avatarData = avatarData, size = 13.dp)
-                Spacer(Modifier.width(5.dp))
-                Text(text = avatarData?.name ?: "unavailable")
-                Spacer(Modifier.width(5.dp))
-              }
+              Spacer(Modifier.width(2.dp))
+              if (avatarData != null)
+                Avatar(avatarData = avatarData, size = 13.dp)
+              Spacer(Modifier.width(5.dp))
+              Text(text = avatarData?.name ?: "unavailable")
+              Spacer(Modifier.width(5.dp))
             }
           }
+        }
+        Row() {
           rootMessageNode.Display(
             modifier = Modifier,
             isInline = false,

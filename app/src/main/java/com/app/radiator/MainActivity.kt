@@ -39,7 +39,7 @@ sealed class Routes(val route: String) {
   object Login : Routes("login")
   object RoomList : Routes("roomlist")
   object Room : Routes("room")
-  object Settings : Routes("settings")
+  object RoomDetails : Routes("settings")
 }
 
 const val homeServer = "matrix.org"
@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
               }
               val isInit = remember { timelineState.isInit() }.collectAsState(initial = false)
               if (isInit.value) {
-                RoomRoute(timelineState = timelineState)
+                RoomRoute(navController = navController, timelineState = timelineState)
               } else {
                 LoadingAnimation()
               }
