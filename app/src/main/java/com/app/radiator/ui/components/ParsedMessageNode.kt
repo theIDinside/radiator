@@ -7,11 +7,15 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,12 +47,15 @@ fun headingStyle(size: Int): TextStyle {
     else -> MaterialTheme.typography.bodySmall.copy()
   }
 }
+// TODO(simon): We really can boil these down to two different types; inline or block nodes,
+//  this would also map nicely to Jetpack Compose's Column() / Row() interface
 
 // TODO: we need to account for newlines after tags. Currently, the parser sees them as their own
 //  individual freestanding (Text) nodes, which they shouldn't be.
 sealed interface ParsedMessageNode {
   // Container types; holds no text themselves, any text they hold lives in a MessageItem.Text node
   data class Root(val children: List<ParsedMessageNode>) : ParsedMessageNode {
+    @OptIn(ExperimentalLayoutApi::class)
     @Composable
     override fun Display(
       modifier: Modifier,
@@ -60,10 +67,11 @@ sealed interface ParsedMessageNode {
       fun doRow(node: ParsedMessageNode) {
         node.Display(modifier = modifier, false, textStyle, onClickedEvent)
       }
-
       Column() {
-        for (child in children) {
-          doRow(child)
+        FlowRow {
+          for (child in children) {
+            doRow(child)
+          }
         }
       }
     }
@@ -99,6 +107,23 @@ sealed interface ParsedMessageNode {
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
       Row(verticalAlignment = Alignment.Bottom) {
+        for (item in items) {
+          item.Display(modifier, isInline = true, textStyle, onClickedEvent)
+        }
+      }
+    }
+  }
+
+  data class Paragraph(val items: List<ParsedMessageNode>) : ParsedMessageNode {
+    @OptIn(ExperimentalLayoutApi::class)
+    @Composable
+    override fun Display(
+      modifier: Modifier,
+      isInline: Boolean,
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+    ) {
+      FlowRow {
         for (item in items) {
           item.Display(modifier, isInline = true, textStyle, onClickedEvent)
         }
@@ -169,7 +194,8 @@ sealed interface ParsedMessageNode {
   }
 
   // Actual text containers; what in the Javascript DOM sense would be an element's "innerText" property
-  data class CodeBlock(val text: AnnotatedString) : ParsedMessageNode {
+  data class CodeBlock(val text: AnnotatedString, val isInline: Boolean = true) :
+    ParsedMessageNode {
 
     @Composable
     fun InlineDisplay(textStyle: TextStyle?, onClickedEvent: (ParsedMessageNode) -> Unit) {
@@ -203,8 +229,11 @@ sealed interface ParsedMessageNode {
           .fillMaxWidth()
           .padding(start = 5.dp, top = 5.dp)
           .clip(blockShape)
+          .heightIn(10.dp, 400.dp)
           .horizontalScroll(rememberScrollState())
+          .verticalScroll(rememberScrollState())
           .clickable { onClickedEvent(this) }
+
       ) {
         if (textStyle != null) {
           Text(modifier = Modifier, text = text, style = textStyle)
@@ -221,26 +250,10 @@ sealed interface ParsedMessageNode {
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
-      if (!isInline) {
+      if (!this.isInline || !isInline) {
         BlockDisplay(textStyle = textStyle, onClickedEvent)
       } else {
         InlineDisplay(textStyle = textStyle, onClickedEvent)
-      }
-    }
-  }
-
-  data class Paragraph(val text: AnnotatedString) : ParsedMessageNode {
-    @Composable
-    override fun Display(
-      modifier: Modifier,
-      isInline: Boolean,
-      textStyle: TextStyle?,
-      onClickedEvent: (ParsedMessageNode) -> Unit,
-    ) {
-      if (textStyle != null) {
-        Text(modifier = Modifier, text = text, style = textStyle)
-      } else {
-        Text(modifier = Modifier, text = text)
       }
     }
   }
