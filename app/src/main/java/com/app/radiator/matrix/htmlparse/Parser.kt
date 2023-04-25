@@ -58,19 +58,7 @@ val whiteListedTags = setOf(
 //  thus, H1-H6 needs to be at index 1 (position 2)
 enum class Tag {
   // HTML Elements
-  PARAGRAPH,
-  H1,
-  H2,
-  H3,
-  H4,
-  H5,
-  H6,
-  OL,
-  UL,
-  LI,
-  PRE,
-  CODE,
-  A,
+  PARAGRAPH, H1, H2, H3, H4, H5, H6, OL, UL, LI, PRE, CODE, A,
 
   // Our own Pseudo-HTML-elements
   Root, InnerTextNode
@@ -102,8 +90,7 @@ fun TagRangeEndInclusive.length(): Int {
 }
 
 sealed class ParsedTag(val tagSpan: TagRangeEndInclusive, val tag: Tag) {
-  class OpenTag(tagSpan: TagRangeEndInclusive, tag: Tag) :
-    ParsedTag(tagSpan = tagSpan, tag = tag) {
+  class OpenTag(tagSpan: TagRangeEndInclusive, tag: Tag) : ParsedTag(tagSpan = tagSpan, tag = tag) {
     /**
      * Returns position in document past the opening tag (i.e after the '>'). If this tag
      * is one that can hold other child elements, it's not necessary true that the actual inner contents
@@ -146,9 +133,11 @@ fun parseTag(start: Int, input: String): ParsedTag {
   // if tag begins with </, it's a closing tag
   val tagNameStarts = if (input[start + 1] == '/') start + 1 else start
   val sub = input.subSequence(tagNameStarts + 1, end)
+
+  // TODO: This will fail strangely when we encounter an unknown element
   return try {
-    val tag = sub.toTag()
-      ?: throw Exception("Parsing tag failed: '$sub' could not be recognized as a tag")
+    val tag =
+      sub.toTag() ?: throw Exception("Parsing tag failed: '$sub' could not be recognized as a tag")
     val tagSpan = start..end
     if (tagNameStarts == start) ParsedTag.OpenTag(tagSpan = tagSpan, tag = tag)
     else ParsedTag.CloseTag(tagSpan = tagSpan, tag = tag)
@@ -182,6 +171,9 @@ abstract class DomNode(val openTag: ParsedTag.OpenTag, val parentNode: DomNode?)
   fun closeTag(tag: ParsedTag.CloseTag) {
     closeTag = tag
   }
+
+  abstract fun canOpenTag(tag: Tag): Boolean
+  abstract fun canCloseTag(tag: Tag): Boolean
 }
 
 class DomRootNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
@@ -193,6 +185,10 @@ class DomRootNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(op
   override fun addNode(node: DomNode) {
     children.add(node)
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = true
+
+  override fun canCloseTag(tag: Tag): Boolean = true
 }
 
 class DomListItem(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
@@ -204,6 +200,10 @@ class DomListItem(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(op
   override fun addNode(node: DomNode) {
     children.add(node)
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = true
+
+  override fun canCloseTag(tag: Tag): Boolean = true
 }
 
 class DomPreNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
@@ -215,13 +215,20 @@ class DomPreNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(ope
   override fun addNode(node: DomNode) {
     if (::codeblockNode.isInitialized) throw Exception("Node already added to this <PRE> node")
     if (node !is DomCodeNode) throw Exception("The only child node supported for <PRE> nodes right now is a single <CODE> node")
+    node.isInline = false
     codeblockNode = node
   }
+
+  override fun canOpenTag(tag: Tag): Boolean {
+    return tag == Tag.CODE
+  }
+
+  override fun canCloseTag(tag: Tag): Boolean = tag == Tag.CODE || tag == Tag.PRE
 }
 
-class DomCodeNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
-  DomNode(openTag, parentNode) {
+class DomCodeNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
   lateinit var innerTextNode: DomTextNode
+  var isInline = true
   override fun build(doc: String): ParsedMessageNode {
     val start = openTag.innerContentsShouldStart()
     val end = closeTag.innerContentsShouldEnd()
@@ -229,7 +236,7 @@ class DomCodeNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
       throw Exception("(start of tag: $start Index $end out of bounds of document: ${doc.length}. Document contents: \n$doc")
     }
     val text = doc.substring(start, end).replace("&quot;", "\"")
-    return ParsedMessageNode.CodeBlock(text = AnnotatedString(text))
+    return ParsedMessageNode.CodeBlock(text = AnnotatedString(text), isInline = isInline)
   }
 
   override fun addNode(node: DomNode) {
@@ -237,23 +244,25 @@ class DomCodeNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
     if (node !is DomTextNode) throw Exception("The only child node supported for <CODE> nodes right now is a single pseudo html TextNode but was $node")
     innerTextNode = node
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = false
+  override fun canCloseTag(tag: Tag): Boolean = tag == Tag.CODE
 }
 
 class DomParagraphNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   DomNode(openTag, parentNode) {
-  lateinit var innerTextNode: DomTextNode
+  private var children: ArrayList<DomNode> = ArrayList()
   override fun build(doc: String): ParsedMessageNode {
-    val start = openTag.innerContentsShouldStart()
-    val end = closeTag.innerContentsShouldEnd()
-    val text = doc.substring(start, end)
-    return ParsedMessageNode.Paragraph(text = AnnotatedString(text))
+    return ParsedMessageNode.Paragraph(items = children.mapNotNull { it.build(doc) }.toList())
   }
 
   override fun addNode(node: DomNode) {
-    if (::innerTextNode.isInitialized) throw Exception("Inner Text Node already added to this <P> node")
-    if (node !is DomTextNode) throw Exception("The only child node supported for <P> nodes right now is a single pseudo html TextNode but was $node")
-    innerTextNode = node
+    children.add(node)
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = true
+
+  override fun canCloseTag(tag: Tag): Boolean = true
 }
 
 class DomOrderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
@@ -261,13 +270,16 @@ class DomOrderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   private var children: ArrayList<DomNode> = ArrayList()
   override fun build(doc: String): ParsedMessageNode {
     return ParsedMessageNode.OrderedList(children.filter { it is DomListItem }
-      .mapNotNull { it.build(doc = doc) }
-      .toList())
+      .mapNotNull { it.build(doc = doc) }.toList())
   }
 
   override fun addNode(node: DomNode) {
     children.add(node)
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = true
+
+  override fun canCloseTag(tag: Tag): Boolean = true
 }
 
 class DomUnorderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
@@ -275,13 +287,16 @@ class DomUnorderedList(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   var children: ArrayList<DomNode> = ArrayList()
   override fun build(doc: String): ParsedMessageNode {
     return ParsedMessageNode.UnorderedList(children.filter { it is DomListItem }
-      .mapNotNull { it.build(doc = doc) }
-      .toList())
+      .mapNotNull { it.build(doc = doc) }.toList())
   }
 
   override fun addNode(node: DomNode) {
     children.add(node)
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = true
+
+  override fun canCloseTag(tag: Tag): Boolean = true
 }
 
 class DomHeadingNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
@@ -295,6 +310,10 @@ class DomHeadingNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   override fun addNode(node: DomNode) {
     children.add(node)
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = true
+
+  override fun canCloseTag(tag: Tag): Boolean = true
 }
 
 class DomTextNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(openTag, parentNode) {
@@ -322,12 +341,21 @@ class DomTextNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(op
   override fun addNode(node: DomNode) {
     throw Exception("Can't add child node to ${this.openTag}")
   }
+
+  override fun canOpenTag(tag: Tag): Boolean {
+    throw Exception("Can't open tag in pseudo element TextNode $tag")
+  }
+
+  override fun canCloseTag(tag: Tag): Boolean {
+    throw Exception("Can't close tag in pseudo element TextNode $tag")
+  }
 }
 
 const val HREF = "href=\""
 
 class DomAHrefNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   DomNode(openTag, parentNode) {
+  lateinit var linkTextNode: DomTextNode
   fun parseUrl(subSequence: CharSequence): String {
     val pos = subSequence.indexOf(HREF)
     var lastPosOfQuote = pos
@@ -355,19 +383,29 @@ class DomAHrefNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   }
 
   override fun addNode(node: DomNode) {
-    throw Exception("This is a Text-content node. Adding other nodes to this is an error")
+    if (::linkTextNode.isInitialized) throw Exception("Inner Text Node already added to this <A> node")
+    if (node !is DomTextNode) throw Exception("The only child node supported for <A> nodes is a single pseudo html TextNode but was $node")
+    linkTextNode = node
   }
+
+  override fun canOpenTag(tag: Tag): Boolean = false
+  override fun canCloseTag(tag: Tag): Boolean = tag == Tag.A
 
 }
 
 // TODO(simon): implement plugin functionality where we can inject our own parsing plugins.
 //  one use case would be, when we parse a code block that has `class=language-foo` that we can pass
 //  a plugin that can parse the language foo into an annotated string (i.e. a string that's syntax highlighted)
-class HTMLParser {
+class HTMLParser(val blackListedTags: Set<String> = setOf()) {
   fun parse(inputBody: String): ParsedMessageNode {
     val rootNode = DomRootNode(ParsedTag.OpenTag(tagSpan = 0..0, tag = Tag.Root), null)
     var currNode: DomNode? = rootNode
-    val body = inputBody.replace("<br>", "\n").trim()
+    var body = inputBody
+    for (blackListedTag in blackListedTags) {
+      val (open, close) = Pair("<$blackListedTag>", "</$blackListedTag>")
+      body = body.replace(open, "").replace(close, "")
+    }
+    body = body.replace("&quot;", "\"")
     var pos = 0
     val len = body.length
     var currentInnerTextNode: DomTextNode? = null
@@ -382,55 +420,69 @@ class HTMLParser {
         }
       } else true
     }
+
+    fun closeInnerText(curr: DomNode, innerTextNode: DomNode, pos: Int): DomTextNode? {
+      innerTextNode.closeTag(
+        ParsedTag.CloseTag(
+          tag = Tag.InnerTextNode, tagSpan = pos..pos
+        )
+      )
+      curr.addNode(innerTextNode)
+      return null
+    }
+
     while (pos < len) {
       if (body[pos] == '<') {
-        if (currentInnerTextNode != null) {
-          currentInnerTextNode.closeTag(
-            ParsedTag.CloseTag(
-              tag = Tag.InnerTextNode, tagSpan = pos..pos
-            )
-          )
-          try {
-            currNode?.addNode(currentInnerTextNode)
-          } catch (ex: Exception) {
-            throw Exception("$ex. Doc contents: $body")
-          }
-          currentInnerTextNode = null
-        }
         when (val tag = parseTag(start = pos, body)) {
           is ParsedTag.CloseTag -> {
-            currNode?.closeTag(tag = tag)
-            currNode = currNode?.parentNode
+            // if this node, accepts child nodes of any kind, then we close this child node
+            if (currNode?.canCloseTag(tag.tag) == true) {
+              // if we were parsing an innerText, first add it to the current node that's being parsed
+              // i.e if we're parsing a <a href>foo bar baz</a>, we close innerText `foo bar baz` first, add it
+              // to this <a> node, then close the <a>
+              if (currentInnerTextNode != null) {
+                currentInnerTextNode = closeInnerText(currNode, currentInnerTextNode, pos)
+              }
+              currNode.closeTag(tag = tag)
+              currNode = currNode.parentNode
+            }
             pos = tag.docIdxEnd()
           }
 
           is ParsedTag.OpenTag -> {
-            val newNode = when (tag.tag) {
-              Tag.OL -> {
-                DomOrderedList(openTag = tag, parentNode = currNode)
-              }
-
-              Tag.UL -> {
-                DomUnorderedList(openTag = tag, parentNode = currNode)
-              }
-
-              Tag.LI -> {
-                DomListItem(openTag = tag, parentNode = currNode)
-              }
-
-              Tag.PRE -> DomPreNode(openTag = tag, parentNode = currNode)
-              Tag.CODE -> DomCodeNode(openTag = tag, parentNode = currNode)
-              Tag.H1, Tag.H2, Tag.H3, Tag.H4, Tag.H5, Tag.H6 -> {
-                DomHeadingNode(openTag = tag, parentNode = currNode)
-              }
-
-              Tag.Root -> DomRootNode(openTag = tag, parentNode = currNode)
-              Tag.InnerTextNode -> throw Exception("Pseudo nodes can't be parsed from document text; we create them after the fact")
-              Tag.PARAGRAPH -> DomParagraphNode(openTag = tag, parentNode = currNode)
-              Tag.A -> DomAHrefNode(openTag = tag, parentNode = currNode)
+            // if we're seeing a new tag, close any innerText node we're parsing and add it to the current
+            // node we're in (not the to be opened node, the current)
+            if(currentInnerTextNode != null) {
+              currentInnerTextNode = closeInnerText(currNode!!, currentInnerTextNode, pos)
             }
-            currNode?.addNode(newNode)
-            currNode = newNode
+            if (currNode?.canOpenTag(tag.tag) == true) {
+              val newNode = when (tag.tag) {
+                Tag.OL -> {
+                  DomOrderedList(openTag = tag, parentNode = currNode)
+                }
+
+                Tag.UL -> {
+                  DomUnorderedList(openTag = tag, parentNode = currNode)
+                }
+
+                Tag.LI -> {
+                  DomListItem(openTag = tag, parentNode = currNode)
+                }
+                // <pre> makes <code> into a block node
+                Tag.PRE -> DomPreNode(openTag = tag, parentNode = currNode)
+                // <code> is an inline node, if it isn't preceeded immediately by a <pre> node
+                Tag.CODE -> DomCodeNode(openTag = tag, parentNode = currNode)
+                Tag.H1, Tag.H2, Tag.H3, Tag.H4, Tag.H5, Tag.H6 -> {
+                  DomHeadingNode(openTag = tag, parentNode = currNode)
+                }
+                Tag.Root -> DomRootNode(openTag = tag, parentNode = currNode)
+                Tag.InnerTextNode -> throw Exception("Pseudo nodes can't be parsed from document text; we create them after the fact")
+                Tag.PARAGRAPH -> DomParagraphNode(openTag = tag, parentNode = currNode)
+                Tag.A -> DomAHrefNode(openTag = tag, parentNode = currNode)
+              }
+              currNode.addNode(newNode)
+              currNode = newNode
+            }
             pos = tag.docIdxEnd()
           }
         }
