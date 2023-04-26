@@ -408,7 +408,11 @@ fun RoomRoute(
       FloatingActionButton(
         onClick = {
           coroutineScope.launch {
-            lazyListState.animateScrollToItem(messages.value.size)
+            if(messages.value.size - lazyListState.firstVisibleItemIndex > 25) {
+              lazyListState.scrollToItem(messages.value.size)
+            } else {
+              lazyListState.animateScrollToItem(messages.value.size)
+            }
           }
         },
         shape = CircleShape,
