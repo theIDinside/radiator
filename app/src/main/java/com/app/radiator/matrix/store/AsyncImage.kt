@@ -14,8 +14,8 @@ import com.app.radiator.matrix.store.AsyncImageStorage.Cache.cacheMutex
 import com.app.radiator.matrix.store.AsyncImageStorage.Cache.cachedBytes
 import com.app.radiator.matrix.store.AsyncImageStorage.Cache.loadedImages
 import com.app.radiator.ui.components.LoadingAnimation
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -76,53 +76,59 @@ object AsyncImageStorage {
     var cachedBytes = 0
   }
 
-  private fun loadImage(coroutineScope: CoroutineScope, matrixUri: MxcURI): AsyncLoadedImage {
+  private suspend fun doLoad(matrixUri: MxcURI) {
+    withContext(Dispatchers.Default) {
+      val url = matrixUri.toUrl()
+      val bytes = url.readBytes()
+      cachedBytes += bytes.size
+      val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+      val asImageBitmap = bitmap.asImageBitmap()
+      cacheMutex.withLock {
+        val elapsed = measureNanoTime {
+          loadedImages[matrixUri]!!.img.value = asImageBitmap
+        }
+        Log.i(
+          "Async Image Storage",
+          "Cached bytes: $cachedBytes. HashMap insertion took $elapsed ns"
+        )
+      }
+    }
+  }
+
+  private fun loadImage(matrixUri: MxcURI): AsyncLoadedImage {
     if (loadedImages.containsKey(matrixUri)) {
       return loadedImages[matrixUri]!!
     }
     val res = loadedImages.getOrPut(matrixUri, defaultValue = { AsyncLoadedImage() })
-    coroutineScope.launch {
-      withContext(Dispatchers.IO) {
-        val url = matrixUri.toUrl()
-        val bytes = url.readBytes()
-        cachedBytes += bytes.size
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        val asImageBitmap = bitmap.asImageBitmap()
-        cacheMutex.withLock {
-          val elapsed = measureNanoTime {
-            loadedImages[matrixUri]!!.img.value = asImageBitmap
-          }
-          Log.i(
-            "Async Image Storage",
-            "Cached bytes: $cachedBytes. HashMap insertion took $elapsed ns"
-          )
-        }
-      }
+    // I don't think the Java URL.readBytes() interface works
+    // well with being cancelled; therefore just lob these downloading coroutines
+    // into the mainscope
+    MainScope().launch {
+      Log.i("loadImage", "CoroutineScope: ${Thread.currentThread()}")
+        doLoad(matrixUri)
     }
     return res
   }
 
   @Composable
   fun AsyncCachedThumbnail(
-    coroutineScope: CoroutineScope,
     modifier: Modifier = Modifier,
     url: MxcURI.Thumbnail,
   ) {
-    val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
-    if (bitmap.img.value != null) {
-      Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = "Avatar")
+    val bitmap = remember { loadImage(matrixUri = url).img }
+    if (bitmap.value != null) {
+      Image(modifier = modifier, bitmap = bitmap.value!!, contentDescription = "Avatar")
     }
   }
 
   @Composable
   fun AsyncImageWithLoadingAnimation(
     modifier: Modifier,
-    coroutineScope: CoroutineScope,
     url: MxcURI.Download,
   ) {
-    val bitmap = remember { loadImage(coroutineScope = coroutineScope, matrixUri = url) }
-    if (bitmap.img.value != null) {
-      Image(modifier = modifier, bitmap = bitmap.img.value!!, contentDescription = "Image")
+    val bitmap = remember { loadImage(matrixUri = url).img }
+    if (bitmap.value != null) {
+      Image(modifier = modifier, bitmap = bitmap.value!!, contentDescription = "Image")
     } else {
       LoadingAnimation(size = 32.dp)
     }
