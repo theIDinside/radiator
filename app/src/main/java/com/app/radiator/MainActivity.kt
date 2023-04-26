@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     applicationSetup(app = application)
-    val matrixClient = MatrixClient()
+    val client = MatrixClient()
 
     setContent {
       RadiatorTheme {
@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         ) {
           val navController = rememberNavController()
           val coroutineScope = rememberCoroutineScope()
-          val isLoggedIn = matrixClient.isLoggedIn().collectAsState(initial = false)
+          val isLoggedIn = client.isLoggedIn().collectAsState(initial = false)
           NavHost(navController = navController, startDestination = Routes.Login.route) {
             composable(Routes.Login.route) {
               LaunchedEffect(isLoggedIn.value) {
@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
                   )
                   coroutineScope.launch {
                     authenticationService.configureHomeserver("matrix.org")
-                    matrixClient.login(
+                    client.login(
                       authService = authenticationService, userName = userId, password = password
                     )
                   }
@@ -84,9 +84,8 @@ class MainActivity : ComponentActivity() {
             }
 
             composable(Routes.RoomList.route) {
-              println("Room list compose")
               val rooms =
-                matrixClient.slidingSyncListener.summaryFlow().collectAsState(initial = emptyList())
+                client.slidingSyncListener.summaryFlow().collectAsState(initial = emptyList())
 
               if (rooms.value.isNotEmpty()) {
                 RoomList(roomList = rooms.value.toImmutableList(), onClick = { summary ->
@@ -99,7 +98,7 @@ class MainActivity : ComponentActivity() {
             composable(Routes.Room.route + "/{roomId}") { navBackStackEntry ->
               val roomId = navBackStackEntry.arguments?.getString("roomId")
               val timelineState = remember {
-                matrixClient.slidingSyncRoomManager.getTimelineState(roomId!!)
+                client.slidingSyncRoomManager.getTimelineState(roomId!!)
               }
               val isInit = remember { timelineState.isInit() }.collectAsState(initial = false)
               if (isInit.value) {
