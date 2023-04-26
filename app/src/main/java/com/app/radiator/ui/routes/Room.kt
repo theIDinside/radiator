@@ -12,10 +12,13 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
@@ -26,8 +29,10 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -37,19 +42,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
-import com.app.radiator.Routes
+import com.app.radiator.matrix.timeline.Message
 import com.app.radiator.matrix.timeline.TimelineItemVariant
 import com.app.radiator.matrix.timeline.VirtualTimelineItem
 import com.app.radiator.ui.components.AvatarData
@@ -60,7 +69,9 @@ import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.LoadingAnimation
 import com.app.radiator.ui.components.MessageComposer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 
 fun ProfileDetails.avatarData(userId: String): AvatarData? {
@@ -74,18 +85,6 @@ fun ProfileDetails.avatarData(userId: String): AvatarData? {
   }
 }
 
-@Preview
-@Composable
-fun PreviewRoomTopBar() {
-  val interactionSource = remember { MutableInteractionSource() }
-  val navCtrl = rememberNavController()
-  RoomTopBar(
-    navController = navCtrl,
-    avatarData = AvatarData(id = "TestRoom", "Test Room", url = null),
-    interactionSource = interactionSource
-  )
-}
-
 sealed class DropDownMenuItems(
   val text: String,
   val icon: ImageVector,
@@ -93,9 +92,6 @@ sealed class DropDownMenuItems(
 ) {
   @Immutable
   object Settings : DropDownMenuItems(text = "Settings", icon = Icons.Outlined.Settings)
-
-  @Immutable
-  object Search : DropDownMenuItems(text = "Search", icon = Icons.Outlined.Email)
 
   @Immutable
   object Invite : DropDownMenuItems(text = "Invite", icon = Icons.Outlined.Person)
@@ -120,33 +116,124 @@ sealed class DropDownMenuItems(
   }
 }
 
+@Preview
+@Composable
+fun PreviewSearchBar() {
+  SearchBar(onSearch = {}, onDone = {})
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun SearchBar(onSearch: (String) -> Unit, onDone: () -> Unit) {
+  val (messageInput, setMessage) = remember { mutableStateOf("") }
+  val keyboardController = LocalSoftwareKeyboardController.current
+  Row(
+    modifier = Modifier.background(color = Color.White),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    OutlinedTextField(
+      modifier = Modifier
+        .fillMaxWidth()
+        .focusTarget()
+        .weight(0.5f),
+      value = messageInput,
+      colors = TextFieldDefaults.colors(
+        focusedContainerColor = Color.White,
+        unfocusedContainerColor = Color.White
+      ),
+      textStyle = TextStyle(fontSize = 14.sp),
+      onValueChange = setMessage,
+      keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+      keyboardActions = KeyboardActions(
+        onSend = {
+          onSearch(messageInput)
+        }, onDone = {
+          keyboardController?.hide()
+          onDone()
+        }, onNext = {
+
+        }),
+      label = { Text("Search for...") },
+      trailingIcon = {
+        Icon(
+          imageVector = Icons.Default.Close,
+          contentDescription = "Exit search mode",
+          modifier = Modifier.clickable {
+            onDone()
+          })
+      }
+    )
+  }
+}
+
+@Preview
+@Composable
+fun PreviewRoomTopBar() {
+  val interactionSource = remember { MutableInteractionSource() }
+  val contextForToast = LocalContext.current.applicationContext
+  RoomTopBar(
+    avatarData = AvatarData(id = "TestRoom", "Test Room", url = null),
+    interactionSource = interactionSource,
+    onSearch = {
+      Toast.makeText(contextForToast, "Should search for $it", Toast.LENGTH_LONG).show()
+    },
+    onRoomDetailsClick = {
+      Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG).show()
+    },
+    onInviteClick = {
+      Toast.makeText(contextForToast, "Should open Invite page", Toast.LENGTH_LONG).show()
+    }
+  )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomTopBar(
-  navController: NavHostController,
   avatarData: AvatarData,
   interactionSource: MutableInteractionSource,
+  onSearch: (String) -> Unit,
+  onRoomDetailsClick: () -> Unit,
+  onInviteClick: () -> Unit,
 ) {
-  val contextForToast = LocalContext.current.applicationContext
   val (expanded, setExpanded) = remember {
     mutableStateOf(false)
   }
+  val (searchingRoom, setSearchRoom) = remember {
+    mutableStateOf(false)
+  }
+  fun cancelSearch() {
+    setSearchRoom(false)
+  }
+
+  @Composable
+  fun showSearch() {
+    IconButton(onClick = {
+      setSearchRoom(true)
+    }) {
+      Icon(imageVector = Icons.Default.Search, contentDescription = "Search in room for...")
+    }
+  }
+
   Box(modifier = Modifier.border(width = 2.dp, color = Color.LightGray)) {
     TopAppBar(
       title = {
         Row(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.Start,
-          modifier = Modifier.clickable {
-            navController.navigate(Routes.RoomDetails.route + "/${avatarData.id}")
-          }
+          modifier = Modifier.clickable { onRoomDetailsClick() }
         ) {
           Avatar(modifier = Modifier, avatarData = avatarData)
           Spacer(Modifier.width(10.dp))
           Text(text = avatarData.name!!)
+          Spacer(Modifier.weight(1.0f))
         }
       },
       actions = {
+        if (!searchingRoom) {
+          showSearch()
+        } else {
+          SearchBar(onSearch = onSearch, onDone = { cancelSearch() })
+        }
         IconButton(onClick = {
           setExpanded(true)
         }) {
@@ -168,10 +255,8 @@ fun RoomTopBar(
 
           DropdownMenuItem(
             onClick = {
-              Toast.makeText(contextForToast, DropDownMenuItems.Settings.text, Toast.LENGTH_SHORT)
-                .show()
               setExpanded(false)
-              navController.navigate(Routes.RoomDetails.route + "/${avatarData.id}")
+              onRoomDetailsClick()
             }, enabled = true, interactionSource = interactionSource,
             text = {
               DropDownMenuItems.Settings.Text()
@@ -182,22 +267,8 @@ fun RoomTopBar(
 
           DropdownMenuItem(
             onClick = {
-              Toast.makeText(contextForToast, DropDownMenuItems.Search.text, Toast.LENGTH_SHORT)
-                .show()
               setExpanded(false)
-            }, enabled = true, interactionSource = interactionSource,
-            text = {
-              DropDownMenuItems.Search.Text()
-            }, leadingIcon = {
-              DropDownMenuItems.Search.Icon()
-            }
-          )
-
-          DropdownMenuItem(
-            onClick = {
-              Toast.makeText(contextForToast, DropDownMenuItems.Invite.text, Toast.LENGTH_SHORT)
-                .show()
-              setExpanded(false)
+              onInviteClick()
             }, enabled = true, interactionSource = interactionSource,
             text = {
               DropDownMenuItems.Invite.Text()
@@ -220,8 +291,10 @@ fun RoomRoute(
   val coroutineScope = rememberCoroutineScope()
   val interactionSource = remember { MutableInteractionSource() }
   val messages = timelineState.currentStateFlow.collectAsState(emptyList())
-
+  val contextForToast = LocalContext.current.applicationContext
   fun reachedTopOfList(index: Int): Boolean = index == 0
+
+  val lastSearchHitIndex = remember { mutableStateOf(0) }
 
   Box(modifier = Modifier.background(color = Color.White)) {
     Scaffold(content = { padding ->
@@ -253,26 +326,24 @@ fun RoomRoute(
 
             is TimelineItemVariant.Virtual -> {
               Spacer(modifier = Modifier.height(5.dp))
-              Box() {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.Center,
-                  verticalAlignment = Alignment.CenterVertically
-                ) {
-                  when (timelineItem.virtual) {
-                    is VirtualTimelineItem.DayDivider -> {
-                      DayDivider(
-                        DateFormat.getDateInstance().format(timelineItem.virtual.ts.toLong())
-                      )
-                    }
-
-                    VirtualTimelineItem.LoadingIndicator -> {
-                      LoadingAnimation(size = 100.dp)
-                    }
-
-                    VirtualTimelineItem.ReadMarker -> {}
-                    VirtualTimelineItem.TimelineStart -> {}
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                when (timelineItem.virtual) {
+                  is VirtualTimelineItem.DayDivider -> {
+                    DayDivider(
+                      DateFormat.getDateInstance().format(timelineItem.virtual.ts.toLong())
+                    )
                   }
+
+                  VirtualTimelineItem.LoadingIndicator -> {
+                    LoadingAnimation(size = 100.dp)
+                  }
+
+                  VirtualTimelineItem.ReadMarker -> {}
+                  VirtualTimelineItem.TimelineStart -> {}
                 }
               }
               Spacer(modifier = Modifier.height(5.dp))
@@ -290,9 +361,45 @@ fun RoomRoute(
       MessageComposer(sendMessageOp = { timelineState.sendMessage(it) })
     }, topBar = {
       RoomTopBar(
-        navController = navController,
         avatarData = timelineState.avatar(),
-        interactionSource = interactionSource
+        interactionSource = interactionSource,
+        onSearch = { searchString ->
+          coroutineScope.launch {
+            withContext(Dispatchers.IO) {
+              var idx = lastSearchHitIndex.value
+              val lastFound = lastSearchHitIndex.value
+              var found = false
+              try {
+                for (item in messages.value.subList(lastFound, messages.value.size)) {
+                  if (item is TimelineItemVariant.Event && item.message is Message.Text) {
+                    if (idx != lastFound && item.message.body.contains(searchString)) {
+                      found = true
+                      break
+                    }
+                  }
+                  idx++
+                }
+                if(!found && lastSearchHitIndex.value != 0) {
+                  lastSearchHitIndex.value = 0
+                } else if(found) {
+                  lastSearchHitIndex.value = idx
+                  // N.B. calling `lazyListState.scrollToItem` from anywhere but main throws exception
+                  withContext(Dispatchers.Main) {
+                    lazyListState.scrollToItem(idx, -20)
+                  }
+                }
+              } catch(ex: Exception) {
+                Log.d("Search", "Search threw exception $ex")
+              }
+            }
+          }
+        },
+        onRoomDetailsClick = {
+          Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG).show()
+        },
+        onInviteClick = {
+          Toast.makeText(contextForToast, "Should open Invite page", Toast.LENGTH_LONG).show()
+        }
       )
     }, floatingActionButton = {
       // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
