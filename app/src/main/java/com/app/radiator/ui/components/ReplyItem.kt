@@ -178,7 +178,6 @@ fun ReplyItemMessageNode(
         Row() {
           rootMessageNode.Display(
             modifier = Modifier,
-            isInline = false,
             textStyle = null,
             onClickedEvent = parsedNodeClickHandlerLogger
           )
