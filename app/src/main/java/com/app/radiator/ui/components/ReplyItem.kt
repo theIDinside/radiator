@@ -116,7 +116,6 @@ fun ReplyItem(
 fun Modifier.replyModifier(): Modifier = this
   .padding(start = 5.dp, top = 5.dp, bottom = 5.dp)
 
-
 @Composable
 fun ReplyItemMessageNode(
   rootMessageNode: ParsedMessageNode,
