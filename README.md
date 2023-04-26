@@ -6,7 +6,7 @@ as attempting to contribute to the backend project on which this application is 
 ### Some ground rules & Important Coding Conventions
 
 #### Variable Naming
- 1. Name all parameters verbosely. This makes grep'ing the code _far_ easier than when names and types are ambiguous 
+ 1. Name all parameters verbosely. This makes grep'ing the code far easier than when names and types are ambiguous 
     one example is, there exists a `SlidingSyncRoom` and a `Room`, naming parameters, variables and arguments as
     `room` only and not `slidingSyncRoom`; there's absolutely no way to easily grep for the difference.
  2. See point one. 
@@ -17,7 +17,7 @@ as attempting to contribute to the backend project on which this application is 
 Keep 3rd party dependencies to an absolute minimum. For a whole host of reasons.
 Using 3rd party dependencies introduce mental overhead for anybody and anyone who isn't familiar
 with those projects. For instance; Need to do some simple serialization? Write your own simple
-serializing function. You do _not_ need to pull in a 3rd party dep to write a few lines of text to a file.
+serializing function. You do not need to pull in a 3rd party dep to write a few lines of text to a file.
 
 3rd party deps introduce the following problems;
  1. Add to build time
@@ -30,3 +30,28 @@ serializing function. You do _not_ need to pull in a 3rd party dep to write a fe
  - And everything else...
  - What is `android:launchMode="singleInstance"`
  - What is `android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"`
+
+
+### Feature implementation
+
+#### General
+- [ ] Login using SSO
+- [ ] Create room
+
+#### In-room features
+- [ ] Serialize cached images
+    - [ ] Compression & decompression of serialized data
+- [ ] Application settings
+- [ ] Room settings
+- [x] Search room for text ([composable](app/src/main/java/com/app/radiator/ui/routes/Room.kt#128-169) [timeline search](app/src/main/java/com/app/radiator/ui/routes/Room.kt))
+- [x] [Display replies](app/src/main/java/com/app/radiator/ui/components/ReplyItem.kt#L94)
+- [ ] Reply to messages
+- [ ] User invite
+- [ ] Room management, banning users, changing topic
+
+#### Media
+- [x] [Asynchronously loading the images](app/src/main/java/com/app/radiator/matrix/store/AsyncImage.kt) 
+- [x] [Caching images to volatile storage](app/src/main/java/com/app/radiator/matrix/store/AsyncImage.kt)
+- [x] [Displaying avatars (users and room)](app/src/main/java/com/app/radiator/ui/components/RowItem.kt)
+- [ ] Display emojis
+- [ ] Being able to download files
