@@ -13,10 +13,12 @@
 #}
 
 # JNA
+-dontwarn java.awt.*
 -keep class com.sun.jna.** { *; }
+-keep class java.awt.** {*; }
 -keep class * implements com.sun.jna.** { *; }
 
--printconfiguration /home/cx/dev/foss/cx/radiator/dev-rapports
+-printconfiguration /home/cx/dev/foss/cx/radiator/dev-rapports/build.log
 
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
