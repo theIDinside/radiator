@@ -137,6 +137,7 @@ interface SlidingSyncRoomManager : Disposable {
 
   fun getSlidingSyncRoom(roomId: String): SlidingSyncRoom
 
+  fun disposeOfTimelineState()
   fun getTimelineState(roomId: String): TimelineState
 }
 
@@ -185,6 +186,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
   val slidingSyncRoomManager = object : SlidingSyncRoomManager {
     val slidingSyncRoomsMap = HashMap<String, SlidingSyncRoom>()
     val slidingSyncRoomList = ArrayList<RoomId>()
+    var timelineState: TimelineState? = null
 
     private fun list() = slidingSyncRoomList
 
@@ -215,11 +217,24 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
       return room
     }
 
-    override fun getTimelineState(roomId: String): TimelineState = TimelineState(
-      slidingSyncRoomsMap[roomId]!!,
-      coroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
-      diffApplyDispatcher = dispatchers.diffUpdateDispatcher
-    )
+    override fun disposeOfTimelineState() {
+      timelineState?.dispose()
+      timelineState = null
+    }
+
+    override fun getTimelineState(roomId: String): TimelineState {
+      if(timelineState?.roomId == roomId) return timelineState!!
+      if(timelineState != null) throw Exception("Previously cached timeline state not diposed of")
+
+      timelineState = TimelineState(
+        roomId= roomId,
+        slidingSyncRoomsMap[roomId]!!,
+        coroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
+        diffApplyDispatcher = dispatchers.diffUpdateDispatcher
+      )
+      return timelineState!!
+    }
+
 
     override fun getRoomSummary(roomId: String): RoomSummary {
       if (slidingSyncRoomsMap[roomId] == null) {

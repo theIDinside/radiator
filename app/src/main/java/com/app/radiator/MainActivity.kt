@@ -1,7 +1,9 @@
 package com.app.radiator
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -10,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.app.radiator.matrix.*
 import com.app.radiator.ui.components.LoadingAnimation
@@ -89,28 +92,44 @@ class MainActivity : ComponentActivity() {
 
               if (rooms.value.isNotEmpty()) {
                 RoomList(roomList = rooms.value.toImmutableList(), onClick = { summary ->
-                  navController.navigate(Routes.Room.route + "/${summary.roomId}")
+                  navController.navigate("roomGraph" + "/${summary.roomId}") {
+                    launchSingleTop = true
+                    restoreState = true
+                  }
                 })
               } else {
                 LoadingAnimation(size = 168.dp)
               }
             }
-            composable(Routes.Room.route + "/{roomId}") { navBackStackEntry ->
-              val roomId = navBackStackEntry.arguments?.getString("roomId")
-              val timelineState = remember {
-                client.slidingSyncRoomManager.getTimelineState(roomId!!)
-              }
-              val isInit = remember { timelineState.isInit() }.collectAsState(initial = false)
-              if (isInit.value) {
-                RoomRoute(navController = navController, timelineState = timelineState)
-              } else {
-                LoadingAnimation()
-              }
-              // Destroy the timeline handle and all the resources it's holding on to (on the SDK side)
-              DisposableEffect(Unit) {
-                onDispose {
-                  timelineState.dispose()
+
+            navigation(
+              route = "roomGraph" + "/{roomId}",
+              startDestination = Routes.Room.route + "/{roomId}"
+            ) {
+              composable(Routes.Room.route + "/{roomId}") { navBackStackEntry ->
+                val roomId = navBackStackEntry.arguments?.getString("roomId")
+                val timelineState = remember {
+                  client.slidingSyncRoomManager.getTimelineState(roomId!!)
                 }
+                Log.i("Room", "timeline state object: $timelineState")
+
+                BackHandler(enabled = true, onBack = {
+                  client.slidingSyncRoomManager.disposeOfTimelineState()
+                  navController.navigate(Routes.RoomList.route) {
+                    popUpTo(Routes.RoomList.route)
+                  }
+                })
+                val isInit = remember { timelineState.isInit() }.collectAsState(initial = false)
+                if (isInit.value) {
+                  RoomRoute(navController = navController, timelineState = timelineState)
+                } else {
+                  LoadingAnimation()
+                }
+                // Destroy the timeline handle and all the resources it's holding on to (on the SDK side)
+              }
+              composable(Routes.RoomDetails.route + "/{roomId}") {
+                val roomId = it.arguments?.getString("roomId")
+                Text("Room details for $roomId")
               }
             }
           }

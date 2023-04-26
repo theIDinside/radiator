@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
+import com.app.radiator.Routes
 import com.app.radiator.matrix.timeline.Message
 import com.app.radiator.matrix.timeline.TimelineItemVariant
 import com.app.radiator.matrix.timeline.VirtualTimelineItem
@@ -395,6 +396,7 @@ fun RoomRoute(
           }
         },
         onRoomDetailsClick = {
+          navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId}")
           Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG).show()
         },
         onInviteClick = {

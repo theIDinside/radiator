@@ -557,6 +557,7 @@ data class CanRequestMoreState(val hasMore: Boolean, val isLoading: Boolean)
  * can render.
  */
 class TimelineState(
+  val roomId: String,
   private val slidingSyncRoom: SlidingSyncRoom,
   private val coroutineScope: CoroutineScope,
   private val diffApplyDispatcher: CoroutineDispatcher,
