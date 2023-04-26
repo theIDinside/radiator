@@ -677,8 +677,7 @@ class TimelineState(
   }
 
   private fun MutableList<TimelineItemVariant>.patchDiff(diff: TimelineDiff) {
-    // apply diff
-    Log.d("TimelineDiff", "Patching diff $diff")
+    // apply diff )
     when (diff.change()) {
       TimelineChange.APPEND -> {
         val append =

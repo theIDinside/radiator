@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -72,7 +71,6 @@ val RoomViewLeftOffset = 7.dp
 @Preview
 @Composable
 fun DayDivider(date: String = "April 10, 2023") {
-  //Row(horizontalArrangement = Arrangement.Center) {
   Column(
     modifier = Modifier
       .fillMaxWidth()
@@ -98,7 +96,6 @@ fun DayDivider(date: String = "April 10, 2023") {
       ) {}
     }
   }
-  //}
 
 }
 
@@ -166,7 +163,6 @@ fun RoomMessageItem(
   ),
   isMe: Boolean = false,
 ) {
-  val coroutineScope = rememberCoroutineScope()
   val interactionSource = remember { MutableInteractionSource() }
   Box(
     modifier = Modifier
@@ -240,7 +236,6 @@ fun RoomMessageItem(
                 val uri = MxcURI.Download(contentTypeItem.source)
                 AsyncImageStorage.AsyncImageWithLoadingAnimation(
                   modifier = Modifier.border(width = 2.dp, color = Color.Black),
-                  coroutineScope = coroutineScope,
                   url = uri
                 )
               }
@@ -301,7 +296,6 @@ fun RoomTextMessage(
   if (textMsg.document != null) {
     textMsg.document.Display(
       modifier = Modifier,
-      isInline = false,
       textStyle = null,
       onClickedEvent = parsedNodeClickHandlerLogger
     )
