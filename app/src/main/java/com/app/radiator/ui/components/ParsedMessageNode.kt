@@ -53,19 +53,26 @@ fun headingStyle(size: Int): TextStyle {
 // TODO: we need to account for newlines after tags. Currently, the parser sees them as their own
 //  individual freestanding (Text) nodes, which they shouldn't be.
 sealed interface ParsedMessageNode {
+
+  @Composable
+  fun Display(
+    modifier: Modifier,
+    textStyle: TextStyle?,
+    onClickedEvent: (ParsedMessageNode) -> Unit,
+  )
+
   // Container types; holds no text themselves, any text they hold lives in a MessageItem.Text node
   data class Root(val children: List<ParsedMessageNode>) : ParsedMessageNode {
     @OptIn(ExperimentalLayoutApi::class)
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
       @Composable
       fun doRow(node: ParsedMessageNode) {
-        node.Display(modifier = modifier, false, textStyle, onClickedEvent)
+        node.Display(modifier = modifier, textStyle, onClickedEvent)
       }
       Column() {
         FlowRow {
@@ -81,7 +88,6 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
@@ -102,13 +108,12 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
       Row(verticalAlignment = Alignment.Bottom) {
         for (item in items) {
-          item.Display(modifier, isInline = true, textStyle, onClickedEvent)
+          item.Display(modifier, textStyle, onClickedEvent)
         }
       }
     }
@@ -119,13 +124,12 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
       FlowRow {
         for (item in items) {
-          item.Display(modifier, isInline = true, textStyle, onClickedEvent)
+          item.Display(modifier, textStyle, onClickedEvent)
         }
       }
     }
@@ -135,7 +139,6 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
@@ -146,7 +149,7 @@ sealed interface ParsedMessageNode {
             verticalAlignment = Alignment.Bottom
           ) {
             Text(text = AnnotatedString("•"))
-            item.Display(modifier, isInline, textStyle, onClickedEvent)
+            item.Display(modifier, textStyle, onClickedEvent)
           }
         }
       }
@@ -157,7 +160,6 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
@@ -168,7 +170,7 @@ sealed interface ParsedMessageNode {
             horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Top
           ) {
             Text(text = AnnotatedString("${idx}. "))
-            item.Display(modifier, isInline, textStyle, onClickedEvent)
+            item.Display(modifier, textStyle, onClickedEvent)
           }
           idx++
         }
@@ -180,14 +182,13 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
       val style = headingStyle(size = size)
       Row() {
         for (item in items) {
-          item.Display(modifier, isInline = true, style, onClickedEvent)
+          item.Display(modifier, style, onClickedEvent)
         }
       }
     }
@@ -246,7 +247,6 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
@@ -263,7 +263,6 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
@@ -280,19 +279,10 @@ sealed interface ParsedMessageNode {
     @Composable
     override fun Display(
       modifier: Modifier,
-      isInline: Boolean,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
     ) {
       TODO("Not yet implemented")
     }
   }
-
-  @Composable
-  fun Display(
-    modifier: Modifier,
-    isInline: Boolean,
-    textStyle: TextStyle?,
-    onClickedEvent: (ParsedMessageNode) -> Unit,
-  )
 }
