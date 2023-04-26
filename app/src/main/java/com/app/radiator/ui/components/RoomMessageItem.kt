@@ -300,20 +300,22 @@ fun RoomTextMessage(
       onClickedEvent = parsedNodeClickHandlerLogger
     )
   } else {
-    val annotatedString = buildAnnotatedString {
-      append(textMsg.body)
-      val textSpan = SpannableString(textMsg.body)
-      LinkifyCompat.addLinks(textSpan, Linkify.WEB_URLS or Linkify.PHONE_NUMBERS)
-      for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
-        val begin = textSpan.getSpanStart(span)
-        val end = textSpan.getSpanEnd(span)
-        addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
-        addStringAnnotation(
-          tag = "URL",
-          annotation = span.url,
-          start = begin,
-          end = end
-        )
+    val annotatedString = remember {
+      buildAnnotatedString {
+        append(textMsg.body)
+        val textSpan = SpannableString(textMsg.body)
+        LinkifyCompat.addLinks(textSpan, Linkify.WEB_URLS or Linkify.PHONE_NUMBERS)
+        for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
+          val begin = textSpan.getSpanStart(span)
+          val end = textSpan.getSpanEnd(span)
+          addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
+          addStringAnnotation(
+            tag = "URL",
+            annotation = span.url,
+            start = begin,
+            end = end
+          )
+        }
       }
     }
 
