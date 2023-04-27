@@ -12,8 +12,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -21,6 +25,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +42,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +76,9 @@ import com.app.radiator.matrix.timeline.ProfileDetails
 import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.LoadingAnimation
+import com.app.radiator.ui.components.MessageAction
 import com.app.radiator.ui.components.MessageComposer
+import com.app.radiator.ui.components.actions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -283,6 +292,7 @@ fun RoomTopBar(
   }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun RoomRoute(
   navController: NavHostController,
@@ -294,151 +304,209 @@ fun RoomRoute(
   val messages = timelineState.currentStateFlow.collectAsState(emptyList())
   val contextForToast = LocalContext.current.applicationContext
   fun reachedTopOfList(index: Int): Boolean = index == 0
-
   val lastSearchHitIndex = remember { mutableStateOf(0) }
 
-  Box(modifier = Modifier.background(color = Color.White)) {
-    Scaffold(content = { padding ->
-      LazyColumn(
+  val itemActionsBottomSheetState = rememberModalBottomSheetState(
+    initialValue = ModalBottomSheetValue.Hidden,
+  )
+
+  val eventSink: (MessageAction) -> Unit = {
+    when (it) {
+      MessageAction.Reply -> TODO()
+      MessageAction.ThreadReply -> TODO()
+      MessageAction.React -> TODO()
+      MessageAction.Edit -> TODO()
+      MessageAction.Delete -> TODO()
+      MessageAction.Share -> TODO()
+      MessageAction.Quote -> TODO()
+    }
+  }
+
+  ModalBottomSheetLayout(
+    modifier = Modifier,
+    sheetState = itemActionsBottomSheetState,
+    sheetContent = {
+      Column(
         modifier = Modifier
-          .fillMaxSize()
-          .padding(padding),
-        state = lazyListState,
-        horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.Bottom,
-        reverseLayout = false
+          .fillMaxWidth()
+          .background(color = Color(45, 45, 55))
+          .border(color = Color(45, 45, 45), width = 4.dp, shape = RoundedCornerShape(5.dp))
+          .padding(start = 5.dp, top = 5.dp, bottom = 5.dp)
       ) {
-        itemsIndexed(
-          items = messages.value,
-          contentType = { _, timelineItem -> timelineItem.contentType() },
-          key = { _, timelineItem -> timelineItem.id() },
-        ) { index, timelineItem ->
-          when (timelineItem) {
-            is TimelineItemVariant.Event -> {
-              if (timelineItem.userCanSee) {
-                RoomMessageItem(item = timelineItem,
-                  avatarData = timelineItem.senderProfile.avatarData(timelineItem.sender),
-                  shouldGroup = timelineItem.groupedByUser,
-                  onClick = {
-                    Log.d("RoomMessageItemClick", "Clicked message item")
-                  })
+        for (action in actions) {
+          Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .padding(bottom = 5.dp)
+              .clickable {
+                eventSink(action.action)
               }
-            }
-
-            is TimelineItemVariant.Virtual -> {
-              Spacer(modifier = Modifier.height(5.dp))
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                when (timelineItem.virtual) {
-                  is VirtualTimelineItem.DayDivider -> {
-                    DayDivider(
-                      DateFormat.getDateInstance().format(timelineItem.virtual.ts.toLong())
-                    )
-                  }
-
-                  VirtualTimelineItem.LoadingIndicator -> {
-                    LoadingAnimation(size = 100.dp)
-                  }
-
-                  VirtualTimelineItem.ReadMarker -> {}
-                  VirtualTimelineItem.TimelineStart -> {}
-                }
-              }
-              Spacer(modifier = Modifier.height(5.dp))
-            }
-
-            TimelineItemVariant.Unknown -> TODO("Should never happen")
-          }
-
-          if (reachedTopOfList(index)) {
-            timelineState.requestMore()
+          ) {
+            Icon(imageVector = action.icon, contentDescription = action.desc)
+            Text(
+              text = action.text,
+              modifier = Modifier.padding(start = 10.dp),
+              color = Color.LightGray
+            )
           }
         }
       }
-    }, bottomBar = {
-      MessageComposer(sendMessageOp = { timelineState.sendMessage(it) })
-    }, topBar = {
-      RoomTopBar(
-        avatarData = timelineState.avatar(),
-        interactionSource = interactionSource,
-        onSearch = { searchString ->
-          coroutineScope.launch {
-            withContext(Dispatchers.IO) {
-              var idx = lastSearchHitIndex.value
-              val lastFound = lastSearchHitIndex.value
-              var found = false
-              try {
-                for (item in messages.value.subList(lastFound, messages.value.size)) {
-                  if (item is TimelineItemVariant.Event && item.message is Message.Text) {
-                    if (idx != lastFound && item.message.body.contains(searchString)) {
-                      found = true
-                      break
-                    }
-                  }
-                  idx++
+    }
+  ) {
+    Box(modifier = Modifier.background(color = Color.White)) {
+      Scaffold(content = { padding ->
+        LazyColumn(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(padding),
+          state = lazyListState,
+          horizontalAlignment = Alignment.Start,
+          verticalArrangement = Arrangement.Bottom,
+          reverseLayout = false
+        ) {
+          itemsIndexed(
+            items = messages.value,
+            contentType = { _, timelineItem -> timelineItem.contentType() },
+            key = { _, timelineItem -> timelineItem.id() },
+          ) { index, timelineItem ->
+            when (timelineItem) {
+              is TimelineItemVariant.Event -> {
+                if (timelineItem.userCanSee) {
+                  RoomMessageItem(item = timelineItem,
+                    avatarData = timelineItem.senderProfile.avatarData(timelineItem.sender),
+                    shouldGroup = timelineItem.groupedByUser,
+                    onClick = {
+                      coroutineScope.launch {
+                        itemActionsBottomSheetState.show()
+                      }
+                      Log.d("RoomMessageItemClick", "Clicked message item")
+                    })
                 }
-                if(!found && lastSearchHitIndex.value != 0) {
-                  lastSearchHitIndex.value = 0
-                } else if(found) {
-                  lastSearchHitIndex.value = idx
-                  // N.B. calling `lazyListState.scrollToItem` from anywhere but main throws exception
-                  withContext(Dispatchers.Main) {
-                    lazyListState.scrollToItem(idx, -20)
-                  }
-                }
-              } catch(ex: Exception) {
-                Log.d("Search", "Search threw exception $ex")
               }
+              is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
+              TimelineItemVariant.Unknown -> TODO("Should never happen")
+            }
+
+            if (reachedTopOfList(index)) {
+              timelineState.requestMore()
             }
           }
-        },
-        onRoomDetailsClick = {
-          navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId}")
-          Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG).show()
-        },
-        onInviteClick = {
-          Toast.makeText(contextForToast, "Should open Invite page", Toast.LENGTH_LONG).show()
         }
+
+      }, bottomBar = {
+        MessageComposer(sendMessageOp = { timelineState.sendMessage(it) })
+      }, topBar = {
+        RoomTopBar(
+          avatarData = timelineState.avatar(),
+          interactionSource = interactionSource,
+          onSearch = { searchString ->
+            coroutineScope.launch {
+              searchTimeline(searchString, lazyListState, lastSearchHitIndex, messages)
+            }
+          },
+          onRoomDetailsClick = {
+            navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId}")
+            Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG)
+              .show()
+          },
+          onInviteClick = {
+            Toast.makeText(contextForToast, "Should open Invite page", Toast.LENGTH_LONG).show()
+          }
+        )
+      }, floatingActionButton = {
+        // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
+        //  it means this composable will get a recomposition triggered _every time the user scrolls_
+        //  - I'm not willing to pay that cost, right now
+        FloatingActionButton(
+          onClick = {
+            coroutineScope.launch {
+              if (messages.value.size - lazyListState.firstVisibleItemIndex > 25) {
+                lazyListState.scrollToItem(messages.value.size)
+              } else {
+                lazyListState.animateScrollToItem(messages.value.size)
+              }
+            }
+          },
+          shape = CircleShape,
+          modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .size(40.dp),
+          containerColor = MaterialTheme.colorScheme.surfaceVariant,
+          contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
+          Icon(Icons.Default.KeyboardArrowDown, "")
+        }
+      }, floatingActionButtonPosition = FabPosition.End
       )
-    }, floatingActionButton = {
-      // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
-      //  it means this composable will get a recomposition triggered _every time the user scrolls_
-      //  - I'm not willing to pay that cost, right now
-      FloatingActionButton(
-        onClick = {
-          coroutineScope.launch {
-            if(messages.value.size - lazyListState.firstVisibleItemIndex > 25) {
-              lazyListState.scrollToItem(messages.value.size)
-            } else {
-              lazyListState.animateScrollToItem(messages.value.size)
-            }
-          }
-        },
-        shape = CircleShape,
-        modifier = Modifier
-          .align(Alignment.BottomCenter)
-          .size(40.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-      ) {
-        Icon(Icons.Default.KeyboardArrowDown, "")
-      }
-    }, floatingActionButtonPosition = FabPosition.End
-    )
 
-    // Auto-scroll when new timeline items appear
-    LaunchedEffect(messages.value) {
-      coroutineScope.launch {
-        if (lazyListState.isScrolledToTheEnd() && !lazyListState.isScrollInProgress) {
-          lazyListState.animateScrollToItem(messages.value.size)
+      // Auto-scroll when new timeline items appear
+      LaunchedEffect(messages.value) {
+        coroutineScope.launch {
+          if (lazyListState.isScrolledToTheEnd() && !lazyListState.isScrollInProgress) {
+            lazyListState.animateScrollToItem(messages.value.size)
+          }
         }
       }
     }
   }
 }
+
+suspend fun searchTimeline(
+  searchString: String,
+  lazyListState: LazyListState,
+  lastSearchHitIndex: MutableState<Int>,
+  messages: State<List<TimelineItemVariant>>,
+) {
+  withContext(Dispatchers.IO) {
+    var idx = lastSearchHitIndex.value
+    val lastFound = lastSearchHitIndex.value
+    var found = false
+    try {
+      for (item in messages.value.subList(lastFound, messages.value.size)) {
+        if (item is TimelineItemVariant.Event && item.message is Message.Text) {
+          if (idx != lastFound && item.message.body.contains(searchString)) {
+            found = true
+            break
+          }
+        }
+        idx++
+      }
+      if (!found && lastSearchHitIndex.value != 0) {
+        lastSearchHitIndex.value = 0
+      } else {
+        lastSearchHitIndex.value = idx
+        // N.B. calling `lazyListState.scrollToItem` from anywhere but main throws exception
+        withContext(Dispatchers.Main) {
+          lazyListState.scrollToItem(idx, -20)
+        }
+      }
+    } catch (ex: Exception) {
+      Log.d("Search", "Search threw exception $ex")
+    }
+  }
+}
+
+@Composable
+fun VirtualItem(timelineItem: TimelineItemVariant.Virtual) {
+  Spacer(modifier = Modifier.height(5.dp))
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.Center,
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    when (timelineItem.virtual) {
+      is VirtualTimelineItem.DayDivider -> DayDivider(
+        DateFormat.getDateInstance().format(timelineItem.virtual.ts.toLong())
+      )
+      VirtualTimelineItem.LoadingIndicator -> LoadingAnimation(size = 100.dp)
+      VirtualTimelineItem.ReadMarker -> {}
+      VirtualTimelineItem.TimelineStart -> {}
+    }
+  }
+  Spacer(modifier = Modifier.height(5.dp))
+}
+
 
 // I have no idea why this is, but it seems as though, 2 is the magic number here; if we say 0, 1 or 2, this all goes to shit
 // we have to compare (less-than) against 3, to "be sure" that we're at the end. Seems lazy column isn't *exact* in it's measurements
