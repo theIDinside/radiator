@@ -212,11 +212,12 @@ fun RoomMessageItem(
           horizontalArrangement = Arrangement.Center,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          val messageTimeStampText =
-            SimpleDateFormat("HH:mm").format(Date(item.timestamp.toLong())).toString()
-          val messageTimeStamp = buildAnnotatedString {
-            withStyle(SpanStyle(color = Color.Gray)) {
-              append(messageTimeStampText)
+          val messageTimeStamp = remember {
+            val messageTimeStampText = SimpleDateFormat("HH:mm").format(Date(item.timestamp.toLong())).toString()
+            buildAnnotatedString {
+              withStyle(SpanStyle(color = Color.Gray)) {
+                append(messageTimeStampText)
+              }
             }
           }
           Text(text = messageTimeStamp, fontSize = 8.sp)
@@ -250,6 +251,7 @@ fun RoomMessageItem(
                 contentTypeItem.content.displayText(item.sender)?.let {
                   SubtleRoomNotification(text = it)
                 }
+
               else -> {
                 Text(contentTypeItem.toString())
               }
