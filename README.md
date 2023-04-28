@@ -34,24 +34,32 @@ But seeing how far I've gotten in just a few weeks, with no prior Android (or Ko
 
 #### In-room features
 - [ ] Room settings
-- [x] Search room for text ([composable](app/src/main/java/com/app/radiator/ui/routes/Room.kt#L128-169), [implementation](app/src/main/java/com/app/radiator/ui/routes/Room.kt#L370-394))
-- [x] [Display replies](app/src/main/java/com/app/radiator/ui/components/ReplyItem.kt#L94)
-- [ ] Reply to messages
+- [x] Search room for text ([composable](app/src/main/java/com/app/radiator/ui/routes/Room.kt#L128), [implementation](app/src/main/java/com/app/radiator/ui/routes/Room.kt#L464))
+- [x] [Display replies](app/src/main/java/com/app/radiator/ui/components/ReplyItem.kt#L89)
+- [ ] Message Actions
+  - [x] [Create UI](app/src/main/java/com/app/radiator/ui/components/MessageAction.kt#L77) for being able to reply, thread reply, react, edit, delete etc 
+  - [ ] Reply
+  - [ ] Thread reply
+  - [ ] Edit 
+  - [ ] Quote
+  - [ ] Delete
+  - [ ] Share
+  - [ ] Reaction
 - [ ] User invite
 - [ ] Room management, banning users, changing topic
 - [x] [Initial, stupid HTML parsing implementation](app/src/main/java/com/app/radiator/matrix/htmlparse/Parser.kt)
 - [ ] Add attachment
 - [ ] Being able to download files 
 - [x] Open http link in default browser
-- [x] [Parse code block HTML](app/src/main/java/com/app/radiator/matrix/htmlparse/Parser.kt#L400-513)
-- [x] [Code block display](app/src/main/java/com/app/radiator/ui/components/ParsedMessageNode.kt#L198-221)
+- [x] [Parse code block HTML](app/src/main/java/com/app/radiator/matrix/htmlparse/Parser.kt#L400)
+- [x] [Code block display](app/src/main/java/com/app/radiator/ui/components/ParsedMessageNode.kt#L218)
 - [ ] Syntax highlighting for code blocks
 - [ ] Send read receipts
 
 ##### Media
 - [x] [Asynchronously loading the images](app/src/main/java/com/app/radiator/matrix/store/AsyncImage.kt) 
 - [x] [Caching images to volatile storage](app/src/main/java/com/app/radiator/matrix/store/AsyncImage.kt)
-- [x] [Displaying avatars (users and room)](app/src/main/java/com/app/radiator/ui/components/RowItem.kt#L22-38)
+- [x] [Displaying avatars (users and room)](app/src/main/java/com/app/radiator/ui/components/RowItem.kt#L22)
 - [ ] Display emojis
 - [ ] Record audio
 - [ ] Record video
