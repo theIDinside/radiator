@@ -185,10 +185,8 @@ fun TimelineItemVariant.Event.userNameDisplay(): AnnotatedString = remember {
 fun RoomMessageItem(
   modifier: Modifier = Modifier,
   item: TimelineItemVariant.Event = preview,
-  selected: Boolean = false,
   onClick: () -> Unit = {},
   onClickHold: (TimelineItemVariant.Event) -> Unit = {},
-  content: @Composable () -> Unit = {},
 ) {
   val interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
   Box(
