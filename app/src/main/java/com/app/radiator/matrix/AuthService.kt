@@ -1,46 +1,77 @@
 package com.app.radiator.matrix
 
+import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import org.matrix.rustcomponents.sdk.SessionVerificationController
 import org.matrix.rustcomponents.sdk.SessionVerificationControllerDelegate
 import org.matrix.rustcomponents.sdk.SessionVerificationEmoji
 
+// TODO: introduce UI for this
 
 class SessionVerification(client: MatrixClient) : SessionVerificationControllerDelegate {
-  private val ffiInterface = client.client.getSessionVerificationController()
+  private var ffiInterface: SessionVerificationController
+  private var isVerifying = false
 
   init {
+    ffiInterface = client.client.getSessionVerificationController()
     ffiInterface.setDelegate(this)
   }
 
   fun requestVerification() {
-    ffiInterface.requestVerification()
+    if(!ffiInterface.isVerified() && !isVerifying) {
+      Log.i("Verification", "Requesting verification...")
+      isVerifying = true
+      ffiInterface.requestVerification()
+    } else {
+      Log.i("Verification", "already verified!")
+    }
   }
 
   fun startVerification() {
-    ffiInterface.startSasVerification()
+    runBlocking {
+      try {
+        ffiInterface.startSasVerification()
+        Log.i("Verification", "Verification start succeeded")
+      } catch (ex: Exception) {
+        Log.i("Verification", "Verification Failed $ex")
+      }
+    }
   }
 
   override fun didAcceptVerificationRequest() {
-    TODO("Not yet implemented")
+    Log.i("Verification", "Verification request accepted")
   }
 
   override fun didCancel() {
-    TODO("Not yet implemented")
+    Log.i("Verification", "Cancelled verification")
   }
 
   override fun didFail() {
-    TODO("Not yet implemented")
+    Log.i("Verification", "Verification failed")
   }
 
   override fun didFinish() {
-    TODO("Not yet implemented")
+    Log.i("Verification", "Verification finished")
   }
 
   override fun didReceiveVerificationData(data: List<SessionVerificationEmoji>) {
-    TODO("Not yet implemented")
+    Log.i("Verification", "Received verification data ${data.joinToString(separator = "; ")}")
+    runBlocking {
+      try {
+        withContext(Dispatchers.IO) {
+          ffiInterface.approveVerification()
+          Log.i("Verification", "Verification approved.")
+        }
+      } catch(ex: Exception) {
+        Log.i("Verification", "Approve request failed $ex")
+      }
+    }
   }
 
   override fun didStartSasVerification() {
-    TODO("Not yet implemented")
+    Log.i("Verification", "Verification started")
+    startVerification()
   }
-
 }
