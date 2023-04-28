@@ -146,6 +146,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
 
   private val slidingSyncListCoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io)
   private val slidingSyncState = MutableStateFlow(SlidingSyncState.NOT_LOADED)
+  private lateinit var sessionVerification: SessionVerification
   var hadSession = false
 
   init {
@@ -427,13 +428,16 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
 
 
   suspend fun restoreSession(authService: AuthenticationService, session: Session) {
-    withContext(Dispatchers.IO) {
+    val ref = this
+    withContext(Dispatchers.Main) {
       runCatching {
         client = authService.restoreWithAccessToken(
           token = session.accessToken,
           deviceId = session.deviceId
         )
         client.setDelegate(ClientErrorHandler())
+        sessionVerification = SessionVerification(ref)
+        sessionVerification.requestVerification()
         slidingSyncJobManager = initSlidingSync()
       }.onSuccess {
         val newSessionState = client.session()
