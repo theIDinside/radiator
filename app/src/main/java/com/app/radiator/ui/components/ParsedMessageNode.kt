@@ -1,8 +1,10 @@
 package com.app.radiator.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +62,16 @@ sealed interface ParsedMessageNode {
     modifier: Modifier,
     textStyle: TextStyle?,
     onClickedEvent: (ParsedMessageNode) -> Unit,
+  ) {
+    Display(modifier, textStyle, onClickedEvent, onLongClick = {})
+  }
+
+  @Composable
+  fun Display(
+    modifier: Modifier,
+    textStyle: TextStyle?,
+    onClickedEvent: (ParsedMessageNode) -> Unit,
+    onLongClick: () -> Unit,
   )
 
   // Container types; holds no text themselves, any text they hold lives in a MessageItem.Text node
@@ -69,10 +82,11 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       @Composable
       fun doRow(node: ParsedMessageNode) {
-        node.Display(modifier = modifier, textStyle, onClickedEvent)
+        node.Display(modifier = modifier, textStyle, onClickedEvent, onLongClick = onLongClick)
       }
       Column() {
         FlowRow {
@@ -90,6 +104,7 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       Text(
         modifier = Modifier.clickable {
@@ -110,10 +125,11 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       Row(verticalAlignment = Alignment.Bottom) {
         for (item in items) {
-          item.Display(modifier, textStyle, onClickedEvent)
+          item.Display(modifier, textStyle, onClickedEvent, onLongClick = onLongClick)
         }
       }
     }
@@ -126,10 +142,11 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       FlowRow {
         for (item in items) {
-          item.Display(modifier, textStyle, onClickedEvent)
+          item.Display(modifier, textStyle, onClickedEvent, onLongClick = onLongClick)
         }
       }
     }
@@ -141,6 +158,7 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       Column() {
         for (item in list) {
@@ -149,7 +167,7 @@ sealed interface ParsedMessageNode {
             verticalAlignment = Alignment.Bottom
           ) {
             Text(text = AnnotatedString("•"))
-            item.Display(modifier, textStyle, onClickedEvent)
+            item.Display(modifier, textStyle, onClickedEvent, onLongClick = onLongClick)
           }
         }
       }
@@ -162,6 +180,7 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       var idx = 1
       Column {
@@ -169,8 +188,8 @@ sealed interface ParsedMessageNode {
           Row(
             horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Top
           ) {
-            Text(text = AnnotatedString("${idx}. "))
-            item.Display(modifier, textStyle, onClickedEvent)
+            Text(text = remember { AnnotatedString("${idx}. ") })
+            item.Display(modifier, textStyle, onClickedEvent, onLongClick = onLongClick)
           }
           idx++
         }
@@ -184,11 +203,12 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       val style = headingStyle(size = size)
       Row() {
         for (item in items) {
-          item.Display(modifier, style, onClickedEvent)
+          item.Display(modifier, style, onClickedEvent, onLongClick = onLongClick)
         }
       }
     }
@@ -198,8 +218,13 @@ sealed interface ParsedMessageNode {
   data class CodeBlock(val text: AnnotatedString, val isInline: Boolean = true) :
     ParsedMessageNode {
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    fun InlineDisplay(textStyle: TextStyle?, onClickedEvent: (ParsedMessageNode) -> Unit) {
+    fun InlineDisplay(
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
+    ) {
       val inlineShape = RoundedCornerShape(7.dp)
       Box(
         modifier = Modifier
@@ -207,9 +232,10 @@ sealed interface ParsedMessageNode {
           .background(color = Color(244, 246, 250))
           .padding(start = 5.dp, end = 5.dp)
           .clip(inlineShape)
-          .clickable {
-            onClickedEvent(this)
-          }
+          .combinedClickable(
+            enabled = true,
+            onLongClick = { onLongClick() },
+            onClick = { onClickedEvent(this) })
 
       ) {
         if (textStyle != null) {
@@ -220,8 +246,13 @@ sealed interface ParsedMessageNode {
       }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
-    fun BlockDisplay(textStyle: TextStyle?, onClickedEvent: (ParsedMessageNode) -> Unit) {
+    fun BlockDisplay(
+      textStyle: TextStyle?,
+      onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
+    ) {
       val blockShape = RoundedCornerShape(10.dp)
       Box(
         modifier = Modifier
@@ -233,8 +264,10 @@ sealed interface ParsedMessageNode {
           .heightIn(10.dp, 400.dp)
           .horizontalScroll(rememberScrollState())
           .verticalScroll(rememberScrollState())
-          .clickable { onClickedEvent(this) }
-
+          .combinedClickable(
+            enabled = true,
+            onLongClick = { onLongClick() },
+            onClick = { onClickedEvent(this) })
       ) {
         if (textStyle != null) {
           Text(modifier = Modifier, text = text, style = textStyle)
@@ -249,11 +282,12 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       if (!this.isInline || !isInline) {
-        BlockDisplay(textStyle = textStyle, onClickedEvent)
+        BlockDisplay(textStyle = textStyle, onClickedEvent, onLongClick = onLongClick)
       } else {
-        InlineDisplay(textStyle = textStyle, onClickedEvent)
+        InlineDisplay(textStyle = textStyle, onClickedEvent, onLongClick = onLongClick)
       }
     }
   }
@@ -265,6 +299,7 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       if (textStyle != null) {
         Text(modifier = Modifier, text = text, style = textStyle)
@@ -281,6 +316,7 @@ sealed interface ParsedMessageNode {
       modifier: Modifier,
       textStyle: TextStyle?,
       onClickedEvent: (ParsedMessageNode) -> Unit,
+      onLongClick: () -> Unit,
     ) {
       TODO("Not yet implemented")
     }

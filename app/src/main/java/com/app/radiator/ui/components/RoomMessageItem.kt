@@ -1,6 +1,5 @@
 package com.app.radiator.ui.components
 
-import android.annotation.SuppressLint
 import android.icu.text.SimpleDateFormat
 import android.text.SpannableString
 import android.text.style.URLSpan
@@ -10,11 +9,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +43,21 @@ import com.app.radiator.matrix.timeline.*
 import com.app.radiator.matrix.timeline.displayName
 import com.app.radiator.ui.routes.avatarData
 import com.app.radiator.ui.theme.LinkColor
+import org.matrix.rustcomponents.sdk.Reaction
 import java.util.*
+
+val previewReactions = listOf(
+  Reaction("\uD83E\uDD29", 4u),
+  Reaction("\uD83D\uDE18", 9u),
+  Reaction("\uD83D\uDE17", 24u),
+  Reaction("\uD83D\uDE1A", 48u),
+  Reaction("\uD83D\uDE0A", 72u),
+  Reaction("\uD83D\uDE19", 8u),
+  Reaction("\uD83E\uDD17", 19u),
+  Reaction("\uD83E\uDD2D", 23u),
+  Reaction("\uD83D\uDE10", 68u),
+  Reaction("\uD83E\uDD28", 13u)
+).sortedBy { it.count }
 
 val preview = TimelineItemVariant.Event(
   id = Math.random().toInt(),
@@ -54,7 +68,7 @@ val preview = TimelineItemVariant.Event(
   isOwn = false,
   isRemote = true,
   localSendState = EventSendState.Sent("eventId"),
-  reactions = listOf(),
+  reactions = previewReactions,
   sender = "@simonfarre:matrix.org",
   senderProfile = ProfileDetails.Ready(
     null, displayName = "simonfarre", displayNameAmbiguous = false
@@ -71,30 +85,28 @@ val RoomViewLeftOffset = 7.dp
 @Preview
 @Composable
 fun DayDivider(date: String = "April 10, 2023") {
-  Column(
+  Box(
+    contentAlignment = Alignment.Center,
     modifier = Modifier
       .fillMaxWidth()
-      .background(Color.White),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally
+      .background(color = Color.White)
   ) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
-      Box(
-        modifier = Modifier
-          .offset(x = 35.dp)
-          .size(width = 100.dp, height = 1.dp)
-          .background(Color.DarkGray)
-          .align(Alignment.CenterStart)
-      ) {}
-      Text(date, fontSize = 10.sp)
-      Box(
-        modifier = Modifier
-          .offset(x = -35.dp)
-          .size(width = 100.dp, height = 1.dp)
-          .background(Color.DarkGray)
-          .align(Alignment.CenterEnd)
-      ) {}
-    }
+    // TODO: replace with drawBehind?
+    Box(
+      modifier = Modifier
+        .offset(x = 35.dp)
+        .size(width = 100.dp, height = 1.dp)
+        .background(Color.DarkGray)
+        .align(Alignment.CenterStart)
+    ) {}
+    Text(date, fontSize = 10.sp)
+    Box(
+      modifier = Modifier
+        .offset(x = -35.dp)
+        .size(width = 100.dp, height = 1.dp)
+        .background(Color.DarkGray)
+        .align(Alignment.CenterEnd)
+    ) {}
   }
 
 }
@@ -147,28 +159,42 @@ val parsedNodeClickHandlerLogger: (node: ParsedMessageNode) -> Unit = {
   }
 }
 
-@SuppressLint("SimpleDateFormat")
+@Composable
+fun TimelineItemVariant.Event.timeStamp(): AnnotatedString = remember {
+  val messageTimeStampText =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp.toLong())).toString()
+  buildAnnotatedString {
+    withStyle(SpanStyle(color = Color.Gray)) {
+      append(messageTimeStampText)
+    }
+  }
+}
+
+@Composable
+fun TimelineItemVariant.Event.userNameDisplay(): AnnotatedString = remember {
+  buildAnnotatedString {
+    withStyle(SpanStyle(color = Color(255, 165, 0))) {
+      append(senderProfile.displayName() ?: sender)
+    }
+  }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Preview
 @Composable
 fun RoomMessageItem(
+  modifier: Modifier = Modifier,
   item: TimelineItemVariant.Event = preview,
   selected: Boolean = false,
   onClick: () -> Unit = {},
-  onClickHold: () -> Unit = {},
+  onClickHold: (TimelineItemVariant.Event) -> Unit = {},
   content: @Composable () -> Unit = {},
-  shouldGroup: Boolean = false,
-  avatarData: AvatarData? = AvatarData(
-    preview.sender, preview.senderProfile.displayName(), url = null
-  ),
-  isMe: Boolean = false,
 ) {
-  val interactionSource = remember { MutableInteractionSource() }
+  val interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
   Box(
-    modifier = Modifier
+    modifier = modifier
       .padding(end = 10.dp, top = 2.dp, bottom = 2.dp)
       .fillMaxWidth()
-      // .wrapContentHeight()
       .background(color = Color.White),
     contentAlignment = Alignment.CenterStart,
   ) {
@@ -178,57 +204,47 @@ fun RoomMessageItem(
         .fillMaxWidth()
     ) {
       Column() {
-        // TODO: user avatar + user name + time stamp display row
-        if (!shouldGroup) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            val innerModifier = Modifier
-              .padding(horizontal = 5.dp, vertical = 5.dp)
-              .offset(y = 2.dp)
-            if (avatarData != null) {
-              Column(modifier = innerModifier) {
-                Avatar(avatarData = avatarData, size = 25.dp)
-              }
+        if (!item.groupedByUser) {
+          Row(
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            val avatar = item.senderProfile.avatarData(item.sender)
+            if (avatar != null) {
+              Avatar(avatarData = avatar, size = 25.dp)
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              val userNameDisplayText = buildAnnotatedString {
-                withStyle(SpanStyle(color = Color(255, 165, 0))) {
-                  append(item.senderProfile.displayName() ?: item.sender)
-                }
-              }
-              Text(userNameDisplayText)
-            }
+            val userNameDisplayText = item.userNameDisplay()
+            Text(userNameDisplayText)
           }
         }
         Row(
           modifier = Modifier
             .offset(RoomViewLeftOffset)
-            .clickable(
-              enabled = true,
-              interactionSource = interactionSource,
+            .fillMaxWidth()
+            .combinedClickable(
               indication = LocalIndication.current,
-              onClick = onClick
-            ),
-          horizontalArrangement = Arrangement.Center,
-          verticalAlignment = Alignment.CenterVertically,
+              interactionSource = interactionSource,
+              enabled = true,
+              onClick = onClick,
+              onLongClick = {
+                onClickHold(item)
+              }), verticalAlignment = Alignment.CenterVertically
         ) {
-          val messageTimeStamp = remember {
-            val messageTimeStampText = SimpleDateFormat("HH:mm").format(Date(item.timestamp.toLong())).toString()
-            buildAnnotatedString {
-              withStyle(SpanStyle(color = Color.Gray)) {
-                append(messageTimeStampText)
-              }
-            }
-          }
+          val messageTimeStamp = item.timeStamp()
           Text(text = messageTimeStamp, fontSize = 8.sp)
           Spacer(modifier = Modifier.width(10.dp))
-          Column() {
+          Column {
             when (val contentTypeItem = item.message) {
               is Message.Text -> {
                 RoomTextMessage(
                   sender = item.sender,
                   textMsg = contentTypeItem,
                   onClick = onClick,
+                  onClickHold = {
+                    onClickHold(item)
+                  },
                   interactionSource = interactionSource
                 )
               }
@@ -258,6 +274,33 @@ fun RoomMessageItem(
             }
           }
         }
+        Row() {
+          item.reactions.Display()
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun List<Reaction>.Display() {
+  val fontSize = remember { 12.sp }
+  FlowRow(Modifier.padding(start = 20.dp, top = 5.dp, end = 30.dp)) {
+    for (reaction in this@Display) {
+      Row(
+        modifier = Modifier
+          .padding(start = 2.dp, bottom = 2.dp)
+          .background(color = Color(85, 120, 85), shape = RoundedCornerShape(50f))
+          .padding(start = 4.dp, end = 4.dp, top = 3.dp, bottom = 3.dp),
+        horizontalArrangement = Arrangement.End
+      ) {
+        Text(text = reaction.key, fontSize = fontSize)
+        Text(
+          text = "${reaction.count}",
+          fontSize = fontSize,
+          style = TextStyle(color = Color.White)
+        )
       }
     }
   }
@@ -268,6 +311,7 @@ fun RoomTextMessage(
   sender: String,
   textMsg: Message.Text,
   onClick: () -> Unit,
+  onClickHold: () -> Unit,
   interactionSource: MutableInteractionSource,
 ) {
   if (textMsg.inReplyTo != null) {
@@ -299,7 +343,8 @@ fun RoomTextMessage(
     textMsg.document.Display(
       modifier = Modifier,
       textStyle = null,
-      onClickedEvent = parsedNodeClickHandlerLogger
+      onClickedEvent = parsedNodeClickHandlerLogger,
+      onLongClick = onClickHold
     )
   } else {
     val annotatedString = remember {
@@ -348,6 +393,9 @@ fun RoomTextMessage(
           } ?: run {
             onClick()
           }
+        },
+        onLongPress = {
+          onClickHold()
         })
     }
 

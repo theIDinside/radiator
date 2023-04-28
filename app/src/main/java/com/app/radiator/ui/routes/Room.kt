@@ -12,11 +12,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetState
 import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -76,10 +76,12 @@ import com.app.radiator.matrix.timeline.ProfileDetails
 import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.LoadingAnimation
-import com.app.radiator.ui.components.MessageAction
+import com.app.radiator.ui.components.MessageCompose
 import com.app.radiator.ui.components.MessageComposer
-import com.app.radiator.ui.components.actions
+import com.app.radiator.ui.components.MessageDrawerContent
+import com.app.radiator.ui.components.general.CenteredRow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
@@ -179,11 +181,9 @@ fun SearchBar(onSearch: (String) -> Unit, onDone: () -> Unit) {
 @Preview
 @Composable
 fun PreviewRoomTopBar() {
-  val interactionSource = remember { MutableInteractionSource() }
   val contextForToast = LocalContext.current.applicationContext
   RoomTopBar(
     avatarData = AvatarData(id = "TestRoom", "Test Room", url = null),
-    interactionSource = interactionSource,
     onSearch = {
       Toast.makeText(contextForToast, "Should search for $it", Toast.LENGTH_LONG).show()
     },
@@ -200,11 +200,13 @@ fun PreviewRoomTopBar() {
 @Composable
 fun RoomTopBar(
   avatarData: AvatarData,
-  interactionSource: MutableInteractionSource,
   onSearch: (String) -> Unit,
   onRoomDetailsClick: () -> Unit,
   onInviteClick: () -> Unit,
 ) {
+
+  val interactionSource = remember { MutableInteractionSource() }
+
   val (expanded, setExpanded) = remember {
     mutableStateOf(false)
   }
@@ -298,27 +300,24 @@ fun RoomRoute(
   navController: NavHostController,
   timelineState: TimelineState,
 ) {
+
   val lazyListState = rememberLazyListState()
   val coroutineScope = rememberCoroutineScope()
-  val interactionSource = remember { MutableInteractionSource() }
   val messages = timelineState.currentStateFlow.collectAsState(emptyList())
   val contextForToast = LocalContext.current.applicationContext
-  fun reachedTopOfList(index: Int): Boolean = index == 0
   val lastSearchHitIndex = remember { mutableStateOf(0) }
-
+  val messageComposeFlow = remember { MutableStateFlow<MessageCompose>(MessageCompose.NewMessage) }
   val itemActionsBottomSheetState = rememberModalBottomSheetState(
     initialValue = ModalBottomSheetValue.Hidden,
   )
 
-  val eventSink: (MessageAction) -> Unit = {
-    when (it) {
-      MessageAction.Reply -> TODO()
-      MessageAction.ThreadReply -> TODO()
-      MessageAction.React -> TODO()
-      MessageAction.Edit -> TODO()
-      MessageAction.Delete -> TODO()
-      MessageAction.Share -> TODO()
-      MessageAction.Quote -> TODO()
+  val clickedItem: MutableState<TimelineItemVariant.Event?> = remember {
+    mutableStateOf(null)
+  }
+
+  LaunchedEffect(itemActionsBottomSheetState.isVisible) {
+    if (!itemActionsBottomSheetState.isVisible) {
+      clickedItem.value = null
     }
   }
 
@@ -326,80 +325,32 @@ fun RoomRoute(
     modifier = Modifier,
     sheetState = itemActionsBottomSheetState,
     sheetContent = {
-      Column(
-        modifier = Modifier
-          .fillMaxWidth()
-          .background(color = Color(45, 45, 55))
-          .border(color = Color(45, 45, 45), width = 4.dp, shape = RoundedCornerShape(5.dp))
-          .padding(start = 5.dp, top = 5.dp, bottom = 5.dp)
-      ) {
-        for (action in actions) {
-          Row(
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-              .padding(bottom = 5.dp)
-              .clickable {
-                eventSink(action.action)
-              }
-          ) {
-            Icon(imageVector = action.icon, contentDescription = action.desc)
-            Text(
-              text = action.text,
-              modifier = Modifier.padding(start = 10.dp),
-              color = Color.LightGray
-            )
-          }
+      MessageDrawerContent { event ->
+        coroutineScope.launch {
+          itemActionsBottomSheetState.hide()
+          val item = clickedItem.value!!.copy(reactions = listOf())
+          messageComposeFlow.emit(MessageCompose.Action(item, event))
         }
       }
     }
   ) {
     Box(modifier = Modifier.background(color = Color.White)) {
       Scaffold(content = { padding ->
-        LazyColumn(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(padding),
-          state = lazyListState,
-          horizontalAlignment = Alignment.Start,
-          verticalArrangement = Arrangement.Bottom,
-          reverseLayout = false
-        ) {
-          itemsIndexed(
-            items = messages.value,
-            contentType = { _, timelineItem -> timelineItem.contentType() },
-            key = { _, timelineItem -> timelineItem.id() },
-          ) { index, timelineItem ->
-            when (timelineItem) {
-              is TimelineItemVariant.Event -> {
-                if (timelineItem.userCanSee) {
-                  RoomMessageItem(item = timelineItem,
-                    avatarData = timelineItem.senderProfile.avatarData(timelineItem.sender),
-                    shouldGroup = timelineItem.groupedByUser,
-                    onClick = {
-                      coroutineScope.launch {
-                        itemActionsBottomSheetState.show()
-                      }
-                      Log.d("RoomMessageItemClick", "Clicked message item")
-                    })
-                }
-              }
-              is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
-              TimelineItemVariant.Unknown -> TODO("Should never happen")
-            }
-
-            if (reachedTopOfList(index)) {
-              timelineState.requestMore()
-            }
-          }
-        }
-
+        MessageList(
+          padding = padding,
+          lazyListState = lazyListState,
+          messages = messages,
+          itemActionsBottomSheetState = itemActionsBottomSheetState,
+          clickedItem = clickedItem,
+          requestMore = { timelineState.requestMore() }
+        )
       }, bottomBar = {
-        MessageComposer(sendMessageOp = { timelineState.sendMessage(it) })
+        MessageComposer(
+          composeFlow = messageComposeFlow,
+          sendMessageOp = { timelineState.sendMessage(it) })
       }, topBar = {
         RoomTopBar(
           avatarData = timelineState.avatar(),
-          interactionSource = interactionSource,
           onSearch = { searchString ->
             coroutineScope.launch {
               searchTimeline(searchString, lazyListState, lastSearchHitIndex, messages)
@@ -452,6 +403,64 @@ fun RoomRoute(
   }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun MessageList(
+  padding: PaddingValues,
+  lazyListState: LazyListState,
+  messages: State<List<TimelineItemVariant>>,
+  itemActionsBottomSheetState: ModalBottomSheetState,
+  clickedItem: MutableState<TimelineItemVariant.Event?>,
+  requestMore: () -> Unit,
+) {
+  fun reachedTopOfList(index: Int): Boolean {
+    return index == 0
+  }
+
+  val coroutineScope = rememberCoroutineScope()
+  LazyColumn(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(padding),
+    state = lazyListState,
+    horizontalAlignment = Alignment.Start,
+    verticalArrangement = Arrangement.Bottom,
+    reverseLayout = false
+  ) {
+    itemsIndexed(
+      items = messages.value,
+      contentType = { _, timelineItem -> timelineItem.contentType() },
+      key = { _, timelineItem -> timelineItem.id() },
+    ) { index, timelineItem ->
+      when (timelineItem) {
+        is TimelineItemVariant.Event -> {
+          if (timelineItem.userCanSee) {
+            RoomMessageItem(
+              item = timelineItem,
+              onClick = {
+                Log.d("RoomMessageItemClick", "Clicked message item")
+              },
+              onClickHold = {
+                coroutineScope.launch {
+                  itemActionsBottomSheetState.show()
+                  clickedItem.value = it
+                }
+              },
+            )
+          }
+        }
+
+        is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
+        TimelineItemVariant.Unknown -> TODO("Should never happen")
+      }
+
+      if (reachedTopOfList(index)) {
+        requestMore()
+      }
+    }
+  }
+}
+
 suspend fun searchTimeline(
   searchString: String,
   lazyListState: LazyListState,
@@ -490,15 +499,14 @@ suspend fun searchTimeline(
 @Composable
 fun VirtualItem(timelineItem: TimelineItemVariant.Virtual) {
   Spacer(modifier = Modifier.height(5.dp))
-  Row(
+  CenteredRow(
     modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.Center,
-    verticalAlignment = Alignment.CenterVertically
   ) {
     when (timelineItem.virtual) {
       is VirtualTimelineItem.DayDivider -> DayDivider(
         DateFormat.getDateInstance().format(timelineItem.virtual.ts.toLong())
       )
+
       VirtualTimelineItem.LoadingIndicator -> LoadingAnimation(size = 100.dp)
       VirtualTimelineItem.ReadMarker -> {}
       VirtualTimelineItem.TimelineStart -> {}

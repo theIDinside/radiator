@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -28,6 +26,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.app.radiator.matrix.timeline.displayName
+import com.app.radiator.ui.components.general.CenteredRow
 
 val ReplyBoxColor = Color(248, 248, 253)
 val ReplyBoxBorderColor = Color(238, 238, 243)
@@ -73,11 +72,7 @@ fun InReplyToCard(avatarData: AvatarData?, onClickUserRepliedTo: () -> Unit) {
       shape = RoundedCornerShape(9.dp),
       elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
     ) {
-      Row(
-        modifier = Modifier,
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
+      CenteredRow {
         Spacer(Modifier.width(2.dp))
         if (avatarData != null) Avatar(avatarData = avatarData, size = 13.dp)
         Spacer(Modifier.width(5.dp))
@@ -92,23 +87,16 @@ fun InReplyToCard(avatarData: AvatarData?, onClickUserRepliedTo: () -> Unit) {
 @Preview
 @Composable
 fun ReplyItem(
-  textThatWasRepliedTo: AnnotatedString = AnnotatedString("Foo\nBar"),
+  repliedTo: AnnotatedString = AnnotatedString("Foo\nBar"),
   avatarData: AvatarData? = AvatarData(
     id = preview.sender, name = preview.senderProfile.displayName(), url = null
   ),
   onClickUserRepliedTo: () -> Unit = {},
 ) {
-  ReplyBox()
-  {
-    Column(
-      modifier = Modifier.replyModifier()
-    ) {
+  ReplyBox() {
+    Column(modifier = Modifier.replyModifier()) {
       InReplyToCard(avatarData=avatarData, onClickUserRepliedTo = onClickUserRepliedTo)
-      Text(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(start = 5.dp), text = textThatWasRepliedTo
-      )
+      Text(text = repliedTo, modifier = Modifier.fillMaxWidth().padding(start = 5.dp))
     }
   }
 }
@@ -123,15 +111,10 @@ fun ReplyItemMessageNode(
   onClickUserRepliedTo: () -> Unit = {},
 ) {
   ReplyBox {
-    Column(
-      modifier = Modifier
-        .replyModifier()
-    ) {
+    Column(modifier = Modifier.replyModifier()) {
       InReplyToCard(avatarData=avatarData, onClickUserRepliedTo = onClickUserRepliedTo)
       Row(modifier = Modifier.padding(start = 10.dp, top = 10.dp)) {
-        rootMessageNode.Display(
-          modifier = Modifier, textStyle = null, onClickedEvent = parsedNodeClickHandlerLogger
-        )
+        rootMessageNode.Display(modifier = Modifier, textStyle = null, onClickedEvent = parsedNodeClickHandlerLogger)
       }
     }
   }
