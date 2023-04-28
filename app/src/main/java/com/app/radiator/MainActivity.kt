@@ -111,7 +111,6 @@ class MainActivity : ComponentActivity() {
                 val timelineState = remember {
                   client.slidingSyncRoomManager.getTimelineState(roomId!!)
                 }
-                Log.i("Room", "timeline state object: $timelineState")
 
                 BackHandler(enabled = true, onBack = {
                   client.slidingSyncRoomManager.disposeOfTimelineState()
