@@ -70,8 +70,8 @@ val preview = TimelineItemVariant.Event(
   localSendState = EventSendState.Sent("eventId"),
   reactions = previewReactions,
   sender = "@simonfarre:matrix.org",
-  senderProfile = ProfileDetails.Ready(
-    null, displayName = "simonfarre", displayNameAmbiguous = false
+  senderProfile = org.matrix.rustcomponents.sdk.ProfileDetails.Ready(
+    avatarUrl=null, displayName = "simonfarre", displayNameAmbiguous = false
   ),
   timestamp = 0u,
   message = Message.Text(
@@ -266,9 +266,16 @@ fun RoomMessageItem(
                   SubtleRoomNotification(text = it)
                 }
 
-              else -> {
-                Text(contentTypeItem.toString())
-              }
+              is Message.UnableToDecrypt -> SubtleRoomNotification(text = "Unable to decrypt message")
+              is Message.Audio,
+              is Message.Emote,
+              is Message.FailedToParseMessageLike,
+              is Message.FailedToParseState,
+              is Message.File,
+              is Message.Notice,
+              is Message.Sticker,
+              is Message.Video
+              -> Text(text = "Type: ${contentTypeItem}, ${contentTypeItem.toString()}")
             }
           }
         }

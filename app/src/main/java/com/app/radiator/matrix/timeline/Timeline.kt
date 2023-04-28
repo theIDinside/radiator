@@ -1,3 +1,5 @@
+@file:OptIn(DelicateCoroutinesApi::class)
+
 package com.app.radiator.matrix.timeline
 
 import android.util.Log
@@ -8,7 +10,9 @@ import com.app.radiator.ui.components.ParsedMessageNode
 import com.app.radiator.ui.components.avatarData
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +49,17 @@ sealed interface ProfileDetails {
   object Unavailable : ProfileDetails
 }
 
+fun FFIProfileDetails.avatarData(userId: String): AvatarData? {
+  return when (this) {
+    is FFIProfileDetails.Ready -> AvatarData(
+      id = userId, name = this.displayName, url = this.avatarUrl
+    )
+
+    FFIProfileDetails.Pending -> TODO("Pending Profile details not handled yet")
+    else -> null
+  }
+}
+
 fun FFIProfileDetails.marshal(): ProfileDetails {
   return when (this) {
     is FFIProfileDetails.Error -> ProfileDetails.Error(message = message)
@@ -68,20 +83,34 @@ interface RepliedToEventDetails {
   object Unavailable : RepliedToEventDetails
 }
 
-fun FFIRepliedToEventDetails.marshal(room: Room, eventId: String?): RepliedToEventDetails {
+fun FFIRepliedToEventDetails.marshal(
+  room: Room,
+  eventId: String?,
+  msgIsLocal: Boolean,
+): RepliedToEventDetails {
   return when (this) {
     is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Error -> RepliedToEventDetails.Error(
       message
     )
 
     is org.matrix.rustcomponents.sdk.RepliedToEventDetails.Ready -> RepliedToEventDetails.Ready(
-      message = message.use { it.marshal(room = room, thisEventId = eventId) },
+      message = message.use { it.marshal(thisEventId = eventId, room = room, msgIsLocal) },
       sender = sender,
       senderProfile = senderProfile.marshal()
     )
 
     org.matrix.rustcomponents.sdk.RepliedToEventDetails.Unavailable -> {
-      room.fetchEventDetails(eventId!!)
+      if (!msgIsLocal && eventId != null) {
+        try {
+          GlobalScope.launch {
+            withContext(Dispatchers.IO) {
+              room.fetchEventDetails(eventId)
+            }
+          }
+        } catch (ex: Exception) {
+          Log.d("Fetching event details", "Failed because $ex")
+        }
+      }
       RepliedToEventDetails.Unavailable
     }
 
@@ -91,8 +120,15 @@ fun FFIRepliedToEventDetails.marshal(room: Room, eventId: String?): RepliedToEve
 
 data class InReplyToDetails(val event: RepliedToEventDetails, val eventId: String)
 
-fun FFIInReplyToDetails.marshal(thisEventId: String?, room: Room): InReplyToDetails =
-  InReplyToDetails(event = event.marshal(room = room, thisEventId), eventId = eventId)
+fun FFIInReplyToDetails.marshal(
+  thisEventId: String?,
+  room: Room,
+  msgIsLocal: Boolean,
+): InReplyToDetails =
+  InReplyToDetails(
+    event = event.marshal(room = room, thisEventId, msgIsLocal = msgIsLocal),
+    eventId = eventId
+  )
 
 interface EventSendState {
   object NotSendYet : EventSendState
@@ -102,7 +138,7 @@ interface EventSendState {
 
 sealed interface OtherState {
   fun displayText(userId: String): String? {
-    return when(this) {
+    return when (this) {
       is RoomAvatar -> "$userId changed room avatar to $url"
       is RoomName -> "$userId changed room name to ${this.name}"
       is RoomThirdPartyInvite -> "$userId 3rd party invited $displayName"
@@ -110,6 +146,7 @@ sealed interface OtherState {
       else -> null
     }
   }
+
   data class Custom(val eventType: String) : OtherState
   data class RoomAvatar(val url: String?) : OtherState
   data class RoomName(val name: String?) : OtherState
@@ -138,7 +175,10 @@ fun FFIOtherState.marshal(): Pair<OtherState, Boolean> {
     is FFIOtherState.Custom -> Pair(OtherState.Custom(this.eventType), false)
     is FFIOtherState.RoomAvatar -> Pair(OtherState.RoomAvatar(this.url), true)
     is FFIOtherState.RoomName -> Pair(OtherState.RoomName(this.name), true)
-    is FFIOtherState.RoomThirdPartyInvite -> Pair(OtherState.RoomThirdPartyInvite(this.displayName), true)
+    is FFIOtherState.RoomThirdPartyInvite -> Pair(
+      OtherState.RoomThirdPartyInvite(this.displayName),
+      true
+    )
     is FFIOtherState.RoomTopic -> Pair(OtherState.RoomTopic(this.topic), true)
     FFIOtherState.PolicyRuleRoom -> Pair(OtherState.PolicyRuleRoom, false)
     FFIOtherState.PolicyRuleServer -> Pair(OtherState.PolicyRuleServer, false)
@@ -334,26 +374,31 @@ interface VirtualTimelineItem {
   object TimelineStart : VirtualTimelineItem
 }
 
-fun ProfileDetails.displayName(): String? {
+fun FFIProfileDetails.displayName(): String? {
   return when (this) {
-    is ProfileDetails.Error -> this.message
-    is ProfileDetails.Ready -> this.displayName
-    else -> null
+    is FFIProfileDetails.Error -> this.message
+    is FFIProfileDetails.Ready -> this.displayName
+    FFIProfileDetails.Pending,
+    FFIProfileDetails.Unavailable,
+    -> null
   }
 }
 
 @Immutable
 sealed interface TimelineItemVariant {
+
   fun contentType(): Int = when (this) {
     is Event -> 0
     is Virtual -> 1
-    Unknown -> 2
+    is Fill -> 2
+    Unknown -> 3
   }
 
   fun id(): Int = when (this) {
     is Event -> id
     is Virtual -> id
-    Unknown -> TODO("We should never end up here")
+    is Fill -> id
+    Unknown -> -1
   }
 
   fun sender(): String? = when (this) {
@@ -373,7 +418,7 @@ sealed interface TimelineItemVariant {
     val localSendState: EventSendState?,
     val reactions: List<Reaction>,
     val sender: String,
-    val senderProfile: ProfileDetails,
+    val senderProfile: FFIProfileDetails,
     val timestamp: ULong,
     val message: Message,
     val groupedByUser: Boolean,
@@ -382,6 +427,9 @@ sealed interface TimelineItemVariant {
 
   @Immutable
   data class Virtual(val id: Int, val virtual: VirtualTimelineItem) : TimelineItemVariant
+
+  @Immutable
+  data class Fill(val id: Int) : TimelineItemVariant
 
   @Immutable
   object Unknown : TimelineItemVariant
@@ -403,7 +451,12 @@ private fun EventTimelineItem.marshal(
 ): TimelineItemVariant.Event {
   val sender = this.sender()
   val continuous = lastUserSeen?.equals(sender) ?: false
-  val (message, visibleToUsers) = this.content().use { it.marshal(this.eventId(), room) }
+  val msgIsLocal = isLocal()
+  val (message, visibleToUsers) = this.content()
+    .use { it.marshal(this.eventId(), room, msgIsLocal) }
+  if (this.isLocal()) {
+    Log.i("EventTimelineItem", "Encountered local event")
+  }
   return TimelineItemVariant.Event(
     id = (0..Int.MAX_VALUE).random(),
     uniqueIdentifier = this.uniqueIdentifier(),
@@ -415,7 +468,7 @@ private fun EventTimelineItem.marshal(
     localSendState = this.localSendState()?.marshal(),
     reactions = this.reactions().map { Reaction(it.key, it.count) },
     sender = sender,
-    senderProfile = this.senderProfile().marshal(),
+    senderProfile = this.senderProfile(),
     timestamp = this.timestamp(),
     message = message,
     groupedByUser = continuous,
@@ -425,36 +478,66 @@ private fun EventTimelineItem.marshal(
 
 val messageBuilder = HTMLParser(blackListedTags = setOf("blockquote", "br"))
 
-fun FFIMessage.marshal(thisEventId: String?, room: Room): Message {
+fun FFIMessage.marshal(thisEventId: String?, room: Room, msgIsLocal: Boolean): Message {
   return when (val msgType = msgtype()!!) {
     is MessageType.Audio -> Message.Audio(body = body(),
-      inReplyTo = inReplyTo()?.use { it.marshal(room = room, thisEventId = thisEventId) },
+      inReplyTo = inReplyTo()?.use {
+        it.marshal(
+          thisEventId = thisEventId,
+          room = room,
+          msgIsLocal = msgIsLocal
+        )
+      },
       isEdited = isEdited(),
       info = msgType.content.info,
       source = msgType.content.source.use { it.url() })
 
     is MessageType.Emote -> Message.Emote(
       body = body(),
-      inReplyTo = inReplyTo()?.use { it.marshal(room = room, thisEventId = thisEventId) },
+      inReplyTo = inReplyTo()?.use {
+        it.marshal(
+          thisEventId = thisEventId,
+          room = room,
+          msgIsLocal = msgIsLocal
+        )
+      },
       isEdited = isEdited(),
       formatted = msgType.content.formatted?.copy()
     )
 
     is MessageType.File -> Message.File(body = body(),
-      inReplyTo = inReplyTo()?.use { it.marshal(room = room, thisEventId = thisEventId) },
+      inReplyTo = inReplyTo()?.use {
+        it.marshal(
+          thisEventId = thisEventId,
+          room = room,
+          msgIsLocal = msgIsLocal
+        )
+      },
       isEdited = isEdited(),
       info = msgType.content.info?.marshal(),
       source = msgType.content.source.use { it.url() })
 
     is MessageType.Image -> Message.Image(body = body(),
-      inReplyTo = inReplyTo()?.use { it.marshal(room = room, thisEventId = thisEventId) },
+      inReplyTo = inReplyTo()?.use {
+        it.marshal(
+          thisEventId = thisEventId,
+          room = room,
+          msgIsLocal = msgIsLocal
+        )
+      },
       isEdited = isEdited(),
       info = msgType.content.info?.marshal(),
       source = msgType.content.source.use { it.url() })
 
     is MessageType.Notice -> Message.Notice(
       body = body(),
-      inReplyTo = inReplyTo()?.use { it.marshal(room = room, thisEventId = thisEventId) },
+      inReplyTo = inReplyTo()?.use {
+        it.marshal(
+          thisEventId = thisEventId,
+          room = room,
+          msgIsLocal = msgIsLocal
+        )
+      },
       isEdited = isEdited(),
       formatted = msgType.content.formatted?.copy()
     )
@@ -472,7 +555,13 @@ fun FFIMessage.marshal(thisEventId: String?, room: Room): Message {
       val body_ = body()
       Message.Text(
         body = body_,
-        inReplyTo = inReplyTo()?.use { it.marshal(thisEventId = thisEventId, room = room) },
+        inReplyTo = inReplyTo()?.use {
+          it.marshal(
+            thisEventId = thisEventId,
+            room = room,
+            msgIsLocal = msgIsLocal
+          )
+        },
         isEdited = isEdited(),
         formatted = mxStripped,
         document = doc
@@ -480,7 +569,13 @@ fun FFIMessage.marshal(thisEventId: String?, room: Room): Message {
     }
 
     is MessageType.Video -> Message.Video(body = body(),
-      inReplyTo = inReplyTo()?.use { it.marshal(room = room, thisEventId = thisEventId) },
+      inReplyTo = inReplyTo()?.use {
+        it.marshal(
+          thisEventId = thisEventId,
+          room = room,
+          msgIsLocal = msgIsLocal
+        )
+      },
       isEdited = isEdited(),
       info = msgType.content.info?.marshal(),
       source = msgType.content.source.use { it.url() })
@@ -494,7 +589,11 @@ fun stripMxReplyBlock(fmtBodyCopy: FormattedBody?): FormattedBody? {
 @Immutable
 data class ItemContentParse(val messsage: Message, val isVisible: Boolean)
 
-private fun TimelineItemContent.marshal(thisEventId: String?, room: Room): ItemContentParse {
+private fun TimelineItemContent.marshal(
+  thisEventId: String?,
+  room: Room,
+  msgIsLocal: Boolean,
+): ItemContentParse {
   return when (val kind = this.kind()) {
     is TimelineItemContentKind.FailedToParseMessageLike -> ItemContentParse(
       Message.FailedToParseMessageLike(
@@ -541,7 +640,10 @@ private fun TimelineItemContent.marshal(thisEventId: String?, room: Room): ItemC
 
     TimelineItemContentKind.Message -> {
       val message = this.asMessage()!!
-      return ItemContentParse(message.marshal(thisEventId, room = room), true)
+      return ItemContentParse(
+        message.marshal(thisEventId, room = room, msgIsLocal = msgIsLocal),
+        true
+      )
     }
 
     TimelineItemContentKind.RedactedMessage -> ItemContentParse(Message.RedactedMessage, true)
@@ -559,7 +661,7 @@ data class CanRequestMoreState(val hasMore: Boolean, val isLoading: Boolean)
 class TimelineState(
   val roomId: String,
   private val slidingSyncRoom: SlidingSyncRoom,
-  private val coroutineScope: CoroutineScope,
+  private val superVisorCoroutineScope: CoroutineScope,
   private val diffApplyDispatcher: CoroutineDispatcher,
 ) : TimelineListener {
   private val initialized = MutableStateFlow(false)
@@ -577,7 +679,7 @@ class TimelineState(
     val roomSubscription =
       RoomSubscription(timelineLimit = null, requiredState = listOf(RequiredState("*", "*")))
     var senderId: String? = null
-    coroutineScope.launch {
+    superVisorCoroutineScope.launch {
       val result = slidingSyncRoom.subscribeAndAddTimelineListener(
         this@TimelineState, roomSubscription
       )
@@ -599,7 +701,7 @@ class TimelineState(
   }
 
   override fun onUpdate(update: TimelineDiff) {
-    coroutineScope.launch {
+    superVisorCoroutineScope.launch {
       withContext(diffApplyDispatcher) {
         mutex.withLock {
           updateTimelineItems {
@@ -617,7 +719,7 @@ class TimelineState(
   }
 
   fun requestMore() {
-    this.coroutineScope.launch(this.diffApplyDispatcher) {
+    this.superVisorCoroutineScope.launch(this.diffApplyDispatcher) {
       val options = PaginationOptions.UntilNumItems(5u, 5u)
       slidingSyncRoom.fullRoom()?.paginateBackwards(options)
     }
@@ -652,7 +754,7 @@ class TimelineState(
     room: Room,
   ): TimelineItemVariant = item.use {
 
-    it.asEvent()?.marshal(lastUserSeen, room = room)?.let { i -> return i }
+    it.asEvent()?.use { evt -> evt.marshal(lastUserSeen, room = room) }?.let { i -> return i }
 
     it.asVirtual()?.let { asVirtual ->
       val id = (0..Int.MAX_VALUE).random()
@@ -695,6 +797,11 @@ class TimelineState(
 
       TimelineChange.SET -> diff.set()?.use {
         val idx = it.index.toInt()
+        if (idx > this.size) {
+          for (fill in this.size..idx) {
+            this.add(fill, TimelineItemVariant.Fill(0))
+          }
+        }
         set(idx, takeMap(it.item, lastUserSeen = this.getOrNull(idx - 1)?.sender(), room = oldRoom))
         val shouldNotGroup: (String?, String?) -> Boolean = { a, b ->
           a != b && (a != null && b != null)
@@ -745,22 +852,53 @@ class TimelineState(
   fun dispose() {
     Log.d("Timeline", "Disposing of timeline")
     taskHandle.use { it.cancel() }
-    coroutineScope.cancel()
+    superVisorCoroutineScope.cancel()
   }
 
-  fun sendMessage(msg: String) {
-    this.coroutineScope.launch(Dispatchers.IO) {
-      runCatching {
-        val id = genTransactionId()
-        val msgAsMarkdown = messageEventContentFromMarkdown(msg)
-        slidingSyncRoom.fullRoom()?.use {
-          it.send(msgAsMarkdown, id)
+  private fun sendMessage(id: String, msg: String) {
+    slidingSyncRoom.fullRoom()?.use {
+      val msgAsMarkdown = messageEventContentFromMarkdown(msg)
+      it.send(msgAsMarkdown, id)
+    }
+  }
+
+  private fun sendReply(id: String, reply: TimelineAction.Reply) {
+    slidingSyncRoom.fullRoom()?.use {
+      it.sendReply(msg = reply.msg, inReplyToEventId = reply.eventId, txnId = id)
+    }
+  }
+
+  private fun sendReaction(reaction: TimelineAction.React) {
+    slidingSyncRoom.fullRoom()?.use {
+      it.sendReaction(eventId = reaction.eventId, key = reaction.reaction)
+    }
+  }
+
+  private fun editMessage(id: String, edit: TimelineAction.Edit) {
+    slidingSyncRoom.fullRoom()?.use {
+      it.edit(newMsg = edit.newContent, originalEventId = edit.eventId, txnId = id)
+    }
+  }
+
+  fun send(action: TimelineAction) {
+    superVisorCoroutineScope.launch {
+      withContext(Dispatchers.IO) {
+        val txId = genTransactionId()
+        when (action) {
+          is TimelineAction.Message -> sendMessage(id = txId, msg = action.msg)
+          is TimelineAction.Reply -> sendReply(id = txId, action)
+          is TimelineAction.React -> sendReaction(action)
+          is TimelineAction.Edit -> editMessage(id = txId, edit=action)
         }
-      }.onFailure {
-        Log.d("Timeline", "Send message fail")
-      }.onSuccess {
-        Log.i("Timeline", "Send message succeeded")
       }
     }
   }
+}
+
+sealed interface TimelineAction {
+  data class Message(val msg: String) : TimelineAction
+  data class Reply(val msg: String, val eventId: String) : TimelineAction
+  data class React(val reaction: String, val eventId: String) : TimelineAction
+
+  data class Edit(val newContent: String, val eventId: String) : TimelineAction
 }

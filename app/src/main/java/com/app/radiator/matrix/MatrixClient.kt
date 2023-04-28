@@ -5,7 +5,6 @@ import androidx.compose.ui.text.AnnotatedString
 import com.app.radiator.*
 import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.matrix.timeline.displayName
-import com.app.radiator.matrix.timeline.marshal
 import com.app.radiator.ui.components.RoomSummary
 import com.app.radiator.ui.components.avatarData
 import kotlinx.collections.immutable.toImmutableList
@@ -230,7 +229,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
       timelineState = TimelineState(
         roomId= roomId,
         slidingSyncRoomsMap[roomId]!!,
-        coroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
+        superVisorCoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
         diffApplyDispatcher = dispatchers.diffUpdateDispatcher
       )
       return timelineState!!
@@ -256,7 +255,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
               is MessageType.Emote -> type.content.body
               is MessageType.File -> type.content.body
               is MessageType.Image -> {
-                it.senderProfile().marshal().displayName()?.let { userName ->
+                it.senderProfile().displayName()?.let { userName ->
                   "$userName sent ${type.content.body}"
                 } ?: type.content.body
               }

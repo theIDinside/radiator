@@ -48,9 +48,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.app.radiator.R
+import com.app.radiator.matrix.timeline.Message
+import com.app.radiator.matrix.timeline.TimelineAction
 import com.app.radiator.matrix.timeline.TimelineItemVariant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -67,15 +70,12 @@ sealed interface MessageCompose {
 fun MessageComposer(
   modifier: Modifier = Modifier,
   composeFlow: MutableStateFlow<MessageCompose> = MutableStateFlow(MessageCompose.NewMessage),
-  sendMessageOp: (String) -> Unit = { Log.w("MessageComposer", "Send message not implemented") },
+  sendMessageOp: (TimelineAction) -> Unit = { Log.w("MessageComposer", "Send message not implemented") },
 ) {
   val (messageInput, setMessage) = remember { mutableStateOf("") }
   val keyboardController = LocalSoftwareKeyboardController.current
   val mContext = LocalContext.current
   val cs = rememberCoroutineScope()
-  fun sendMessage() {
-    sendMessageOp(messageInput)
-  }
 
   fun showAddOnToMessage() {
     Toast.makeText(mContext, "Add images, links, etc...", Toast.LENGTH_LONG).show()
@@ -87,6 +87,32 @@ fun MessageComposer(
 
   val composeAction = composeFlow.collectAsState()
 
+  fun sendMessage() {
+    when(val cAct = composeAction.value) {
+      is MessageCompose.Action -> {
+        when(cAct.action) {
+          MessageAction.Reply -> {
+            val action = TimelineAction.Reply(msg=messageInput, cAct.item.eventId!!)
+            sendMessageOp(action)
+          }
+          MessageAction.React -> {
+            val action = TimelineAction.React(reaction=messageInput, eventId = cAct.item.eventId!!)
+            sendMessageOp(action)
+          }
+          MessageAction.Edit -> {
+            val action = TimelineAction.Edit(newContent = messageInput, eventId= cAct.item.eventId!!)
+            sendMessageOp(action)
+          }
+          MessageAction.ThreadReply -> TODO()
+          MessageAction.Delete -> TODO()
+          MessageAction.Share -> TODO()
+          MessageAction.Quote -> TODO()
+        }
+      }
+      MessageCompose.NewMessage -> sendMessageOp(TimelineAction.Message(messageInput))
+    }
+  }
+
   BackHandler(enabled = composeAction.value !is MessageCompose.NewMessage) {
     cs.launch {
       emitComposeState()
@@ -97,7 +123,7 @@ fun MessageComposer(
     when (val act = composeAction.value) {
       is MessageCompose.Action -> {
         when (act.action) {
-          MessageAction.Reply, MessageAction.ThreadReply, MessageAction.Quote -> {
+          MessageAction.Reply, MessageAction.ThreadReply, MessageAction.Quote, MessageAction.React -> {
             Box(
               modifier =
               Modifier
@@ -125,9 +151,11 @@ fun MessageComposer(
               )
             }
           }
-
-          MessageAction.React -> TODO()
-          MessageAction.Edit -> TODO()
+          MessageAction.Edit -> {
+            if(act.item.message is Message.Text) {
+              setMessage(act.item.message.body)
+            }
+          }
           MessageAction.Delete -> TODO()
           MessageAction.Share -> TODO()
         }
@@ -185,7 +213,7 @@ fun MessageComposer(
             unfocusedContainerColor = Color.White
           ),
           onValueChange = setMessage,
-          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send, keyboardType = KeyboardType.Text),
           keyboardActions = KeyboardActions(
             onSend = {
               sendMessage()

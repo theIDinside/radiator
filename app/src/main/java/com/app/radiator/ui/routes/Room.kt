@@ -341,13 +341,16 @@ fun RoomRoute(
           lazyListState = lazyListState,
           messages = messages,
           itemActionsBottomSheetState = itemActionsBottomSheetState,
-          clickedItem = clickedItem,
+          clickedItemPublisher = clickedItem,
           requestMore = { timelineState.requestMore() }
         )
       }, bottomBar = {
         MessageComposer(
           composeFlow = messageComposeFlow,
-          sendMessageOp = { timelineState.sendMessage(it) })
+          sendMessageOp = {
+            timelineState.send(it)
+            coroutineScope.launch { messageComposeFlow.emit(MessageCompose.NewMessage) }
+          })
       }, topBar = {
         RoomTopBar(
           avatarData = timelineState.avatar(),
@@ -410,7 +413,7 @@ fun MessageList(
   lazyListState: LazyListState,
   messages: State<List<TimelineItemVariant>>,
   itemActionsBottomSheetState: ModalBottomSheetState,
-  clickedItem: MutableState<TimelineItemVariant.Event?>,
+  clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
   requestMore: () -> Unit,
 ) {
   fun reachedTopOfList(index: Int): Boolean {
@@ -443,7 +446,7 @@ fun MessageList(
               onClickHold = {
                 coroutineScope.launch {
                   itemActionsBottomSheetState.show()
-                  clickedItem.value = it
+                  clickedItemPublisher.value = it
                 }
               },
             )
@@ -451,7 +454,8 @@ fun MessageList(
         }
 
         is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
-        TimelineItemVariant.Unknown -> TODO("Should never happen")
+        TimelineItemVariant.Unknown -> {}
+        is TimelineItemVariant.Fill -> {}
       }
 
       if (reachedTopOfList(index)) {
