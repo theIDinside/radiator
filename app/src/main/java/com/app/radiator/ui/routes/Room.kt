@@ -51,6 +51,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -140,6 +142,7 @@ fun PreviewSearchBar() {
 fun SearchBar(onSearch: (String) -> Unit, onDone: () -> Unit) {
   val (messageInput, setMessage) = remember { mutableStateOf("") }
   val keyboardController = LocalSoftwareKeyboardController.current
+  val focusRequester = remember { FocusRequester() }
   Row(
     modifier = Modifier.background(color = Color.White),
     verticalAlignment = Alignment.CenterVertically
@@ -148,7 +151,8 @@ fun SearchBar(onSearch: (String) -> Unit, onDone: () -> Unit) {
       modifier = Modifier
         .fillMaxWidth()
         .focusTarget()
-        .weight(0.5f),
+        .weight(0.5f)
+        .focusRequester(focusRequester),
       value = messageInput,
       colors = TextFieldDefaults.colors(
         focusedContainerColor = Color.White,
@@ -176,6 +180,9 @@ fun SearchBar(onSearch: (String) -> Unit, onDone: () -> Unit) {
           })
       }
     )
+  }
+  LaunchedEffect(Unit) {
+    focusRequester.requestFocus()
   }
 }
 
