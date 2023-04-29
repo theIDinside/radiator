@@ -8,6 +8,7 @@ But seeing how far I've gotten in just a few weeks, with no prior Android (or Ko
 [Conventions and & ideology](Conventions&Ideology.md), like when to use and when not to use dependencies, "rules of thumb", etc 
 
 ## Current state
+If you want to use the release build version, just rename `release-matrix-rust-sdk.aar` to `matrix-rust-sdk.aar` 
 
 ### TODO
  - Add more README content, the usual suspects stuff
