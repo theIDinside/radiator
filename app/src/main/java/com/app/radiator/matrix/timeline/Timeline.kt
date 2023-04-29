@@ -883,12 +883,12 @@ class TimelineState(
   fun send(action: TimelineAction) {
     superVisorCoroutineScope.launch {
       withContext(Dispatchers.IO) {
-        val txId = genTransactionId()
         when (action) {
-          is TimelineAction.Message -> sendMessage(id = txId, msg = action.msg)
-          is TimelineAction.Reply -> sendReply(id = txId, action)
+          is TimelineAction.Message -> sendMessage(id = genTransactionId(), msg = action.msg)
+          is TimelineAction.Reply -> sendReply(id = genTransactionId(), action)
           is TimelineAction.React -> sendReaction(action)
-          is TimelineAction.Edit -> editMessage(id = txId, edit=action)
+          is TimelineAction.Edit -> editMessage(id = genTransactionId(), edit=action)
+          is TimelineAction.ThreadReply -> TODO()
         }
       }
     }
@@ -898,6 +898,7 @@ class TimelineState(
 sealed interface TimelineAction {
   data class Message(val msg: String) : TimelineAction
   data class Reply(val msg: String, val eventId: String) : TimelineAction
+  data class ThreadReply(val msg: String, val eventId: String) : TimelineAction
   data class React(val reaction: String, val eventId: String) : TimelineAction
 
   data class Edit(val newContent: String, val eventId: String) : TimelineAction

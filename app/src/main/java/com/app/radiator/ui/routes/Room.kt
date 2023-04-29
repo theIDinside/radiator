@@ -76,12 +76,13 @@ import com.app.radiator.matrix.timeline.ProfileDetails
 import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.LoadingAnimation
-import com.app.radiator.ui.components.MessageCompose
-import com.app.radiator.ui.components.MessageComposer
+import com.app.radiator.ui.components.MessageDrawerActionType
 import com.app.radiator.ui.components.MessageDrawerContent
+import com.app.radiator.ui.components.MessageComposer
+import com.app.radiator.ui.components.MessageComposerState
+import com.app.radiator.ui.components.ComposerState
 import com.app.radiator.ui.components.general.CenteredRow
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
@@ -299,6 +300,7 @@ fun RoomTopBar(
 fun RoomRoute(
   navController: NavHostController,
   timelineState: TimelineState,
+  messageComposer: MessageComposerState
 ) {
 
   val lazyListState = rememberLazyListState()
@@ -306,7 +308,7 @@ fun RoomRoute(
   val messages = timelineState.currentStateFlow.collectAsState(emptyList())
   val contextForToast = LocalContext.current.applicationContext
   val lastSearchHitIndex = remember { mutableStateOf(0) }
-  val messageComposeFlow = remember { MutableStateFlow<MessageCompose>(MessageCompose.NewMessage) }
+
   val itemActionsBottomSheetState = rememberModalBottomSheetState(
     initialValue = ModalBottomSheetValue.Hidden,
   )
@@ -329,7 +331,13 @@ fun RoomRoute(
         coroutineScope.launch {
           itemActionsBottomSheetState.hide()
           val item = clickedItem.value!!.copy(reactions = listOf())
-          messageComposeFlow.emit(MessageCompose.Action(item, event))
+          when(event) {
+            MessageDrawerActionType.Reply -> messageComposer.setState(ComposerState.Reply(item))
+            MessageDrawerActionType.ThreadReply -> messageComposer.setState(ComposerState.ThreadReply(item))
+            MessageDrawerActionType.React -> messageComposer.setState(ComposerState.React(item))
+            MessageDrawerActionType.Edit -> messageComposer.setState(ComposerState.Edit(item))
+            MessageDrawerActionType.Delete, MessageDrawerActionType.Share, MessageDrawerActionType.Quote, MessageDrawerActionType.NewMessage -> {}
+          }
         }
       }
     }
@@ -345,12 +353,7 @@ fun RoomRoute(
           requestMore = { timelineState.requestMore() }
         )
       }, bottomBar = {
-        MessageComposer(
-          composeFlow = messageComposeFlow,
-          sendMessageOp = {
-            timelineState.send(it)
-            coroutineScope.launch { messageComposeFlow.emit(MessageCompose.NewMessage) }
-          })
+        MessageComposer(messageComposer)
       }, topBar = {
         RoomTopBar(
           avatarData = timelineState.avatar(),

@@ -82,7 +82,6 @@ object SDKLogging {
 
   private fun allModules(): List<SDKModule> =
     SDKModule::class.sealedSubclasses.map { it.objectInstance!! }.toPersistentList()
-  // fun allModules(): List<Module> = persistentListOf(Module.SDK,Module.SlidingSync,Module.BaseSlidingSync,Module.FFI,Module.UniFFIAPI,Module.HTTPClient,Module.Crypto,Module.Sled)
 
   private var settings: MutableMap<SDKModule, SDKLogLevels> =
     allModules().associateWith { SDKLogLevels.Off }.toMutableMap()
