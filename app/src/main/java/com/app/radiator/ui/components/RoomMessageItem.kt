@@ -179,6 +179,15 @@ fun TimelineItemVariant.Event.userNameDisplay(): AnnotatedString = remember {
   }
 }
 
+@Preview
+@Composable
+fun RoomMessageItem(
+  modifier: Modifier = Modifier,
+  item: TimelineItemVariant.Event = preview,
+) {
+  RoomMessageItem(modifier=modifier, item=item, onClick = {}, onClickHold = {})
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Preview
 @Composable

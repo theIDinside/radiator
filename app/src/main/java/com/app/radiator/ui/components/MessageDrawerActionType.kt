@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.app.radiator.ui.components.MessageAction.*
+import com.app.radiator.ui.components.MessageDrawerActionType.*
 import com.app.radiator.ui.components.general.CenteredRow
 
 @Preview
@@ -40,13 +40,14 @@ fun PreviewMessageDrawerContents() {
       Delete -> TODO()
       Share -> TODO()
       Quote -> TODO()
+      NewMessage -> TODO()
     }
   }
 }
 
 @Immutable
-enum class MessageAction {
-  Reply, ThreadReply, React, Edit, Delete, Share, Quote
+enum class MessageDrawerActionType {
+  Reply, ThreadReply, React, Edit, Delete, Share, Quote, NewMessage
 }
 
 @Immutable
@@ -54,7 +55,7 @@ data class MessageDrawerAction(
   val text: String,
   val icon: ImageVector,
   val desc: String,
-  val action: MessageAction,
+  val action: MessageDrawerActionType,
 )
 
 val actions = listOf(
@@ -74,7 +75,7 @@ val actions = listOf(
 val messageDrawerActionFontSize = 20.sp
 
 @Composable
-fun  MessageDrawerContent(eventSink: (MessageAction) -> Unit) {
+fun MessageDrawerContent(eventSink: (MessageDrawerActionType) -> Unit) {
   Column(
     modifier = Modifier
       .fillMaxWidth()
