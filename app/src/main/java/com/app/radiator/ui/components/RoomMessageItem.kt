@@ -345,7 +345,6 @@ fun RoomTextMessage(
               )
             }
           }
-
           else -> {}
         }
       }
@@ -419,6 +418,9 @@ fun RoomTextMessage(
       text = annotatedString,
       onTextLayout = { layoutResult.value = it }
     )
+  }
+  if(textMsg.isEdited) {
+    SubtleRoomNotification(text = "(edited)")
   }
 }
 
