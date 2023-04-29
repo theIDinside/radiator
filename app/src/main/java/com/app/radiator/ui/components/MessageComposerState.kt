@@ -106,7 +106,7 @@ sealed interface ComposerState {
   }
 }
 
-class MessageComposer(
+class MessageComposerState(
   private val composerCoroutineScope: CoroutineScope,
   private val timeline: TimelineState,
 ) {
@@ -184,7 +184,7 @@ fun showAddOnToMessage(toastContext: Context) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun DisplayComposerEditor(messageComposer: MessageComposer) {
+fun DisplayComposerEditor(messageComposer: MessageComposerState) {
   val keyboardController = LocalSoftwareKeyboardController.current
   val mContext = LocalContext.current
 
@@ -243,7 +243,7 @@ fun DisplayComposerEditor(messageComposer: MessageComposer) {
 }
 
 @Composable
-fun DisplayComposer(messageComposer: MessageComposer) {
+fun MessageComposer(messageComposer: MessageComposerState) {
   val item = messageComposer.flow.collectAsState().value.timelineItem()
   Column {
     if (item != null) {

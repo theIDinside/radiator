@@ -79,8 +79,8 @@ import com.app.radiator.ui.components.LoadingAnimation
 import com.app.radiator.ui.components.MessageDrawerActionType
 import com.app.radiator.ui.components.MessageDrawerContent
 import com.app.radiator.ui.components.MessageComposer
+import com.app.radiator.ui.components.MessageComposerState
 import com.app.radiator.ui.components.ComposerState
-import com.app.radiator.ui.components.DisplayComposer
 import com.app.radiator.ui.components.general.CenteredRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -300,7 +300,7 @@ fun RoomTopBar(
 fun RoomRoute(
   navController: NavHostController,
   timelineState: TimelineState,
-  messageComposer: MessageComposer
+  messageComposer: MessageComposerState
 ) {
 
   val lazyListState = rememberLazyListState()
@@ -353,7 +353,7 @@ fun RoomRoute(
           requestMore = { timelineState.requestMore() }
         )
       }, bottomBar = {
-        DisplayComposer(messageComposer)
+        MessageComposer(messageComposer)
       }, topBar = {
         RoomTopBar(
           avatarData = timelineState.avatar(),

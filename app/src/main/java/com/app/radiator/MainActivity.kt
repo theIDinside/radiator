@@ -15,7 +15,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.app.radiator.matrix.*
 import com.app.radiator.ui.components.LoadingAnimation
-import com.app.radiator.ui.components.MessageComposer
+import com.app.radiator.ui.components.MessageComposerState
 import com.app.radiator.ui.routes.LoginScreen
 import com.app.radiator.ui.routes.RoomList
 import com.app.radiator.ui.routes.RoomRoute
@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
                   }
                 })
                 val isInit = remember { timelineState.isInit() }.collectAsState(initial = false)
-                val composer = MessageComposer(rememberCoroutineScope(), timelineState)
+                val composer = MessageComposerState(rememberCoroutineScope(), timelineState)
                 if (isInit.value) {
                   RoomRoute(navController = navController, timelineState = timelineState, composer)
                 } else {
