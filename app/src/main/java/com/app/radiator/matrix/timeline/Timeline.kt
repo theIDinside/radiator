@@ -397,7 +397,7 @@ sealed interface TimelineItemVariant {
   fun id(): Int = when (this) {
     is Event -> id
     is Virtual -> id
-    is Fill -> id
+    is Fill -> 0
     Unknown -> -1
   }
 
@@ -429,7 +429,7 @@ sealed interface TimelineItemVariant {
   data class Virtual(val id: Int, val virtual: VirtualTimelineItem) : TimelineItemVariant
 
   @Immutable
-  data class Fill(val id: Int) : TimelineItemVariant
+  object Fill : TimelineItemVariant
 
   @Immutable
   object Unknown : TimelineItemVariant
@@ -780,7 +780,6 @@ class TimelineState(
   }
 
   private fun MutableList<TimelineItemVariant>.patchDiff(diff: TimelineDiff) {
-    // apply diff )
     when (diff.change()) {
       TimelineChange.APPEND -> {
         val append =
@@ -799,7 +798,7 @@ class TimelineState(
         val idx = it.index.toInt()
         if (idx > this.size) {
           for (fill in this.size..idx) {
-            this.add(fill, TimelineItemVariant.Fill(0))
+            this.add(fill, TimelineItemVariant.Fill)
           }
         }
         set(idx, takeMap(it.item, lastUserSeen = this.getOrNull(idx - 1)?.sender(), room = oldRoom))

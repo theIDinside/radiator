@@ -307,7 +307,7 @@ fun RoomTopBar(
 fun RoomRoute(
   navController: NavHostController,
   timelineState: TimelineState,
-  messageComposer: MessageComposerState
+  messageComposer: MessageComposerState,
 ) {
 
   val lazyListState = rememberLazyListState()
@@ -338,7 +338,7 @@ fun RoomRoute(
         coroutineScope.launch {
           itemActionsBottomSheetState.hide()
           val item = clickedItem.value!!.copy(reactions = listOf())
-          when(event) {
+          when (event) {
             MessageDrawerActionType.Reply -> messageComposer.setState(ComposerState.Reply(item))
             MessageDrawerActionType.ThreadReply -> messageComposer.setState(ComposerState.ThreadReply(item))
             MessageDrawerActionType.React -> messageComposer.setState(ComposerState.React(item))
