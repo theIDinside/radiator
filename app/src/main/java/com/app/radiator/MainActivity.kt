@@ -19,6 +19,7 @@ import com.app.radiator.ui.components.MessageComposerState
 import com.app.radiator.ui.routes.LoginScreen
 import com.app.radiator.ui.routes.RoomList
 import com.app.radiator.ui.routes.RoomRoute
+import com.app.radiator.ui.routes.ThreadRoute
 import com.app.radiator.ui.theme.RadiatorTheme
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.*
@@ -43,6 +44,7 @@ sealed class Routes(val route: String) {
   object RoomList : Routes("roomlist")
   object Room : Routes("room")
   object RoomDetails : Routes("settings")
+  object Thread : Routes("thread")
 }
 
 const val homeServer = "matrix.org"
@@ -131,6 +133,16 @@ class MainActivity : ComponentActivity() {
                 val roomId = it.arguments?.getString("roomId")
                 Text("Room details for $roomId")
               }
+              /*
+              composable(Routes.Thread.route + "/{eventId}/{roomId}") {
+                val roomId = it.arguments?.getString("roomId")
+                val eventId = it.arguments?.getString("eventId")!!
+                val timelineState = remember {
+                  client.slidingSyncRoomManager.getTimelineState(roomId!!)
+                }
+                val composer = MessageComposerState(rememberCoroutineScope(), timelineState)
+                ThreadRoute(navController = navController, timelineState = timelineState, composer, eventId)
+              }*/
             }
           }
         }

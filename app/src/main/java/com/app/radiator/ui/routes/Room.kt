@@ -84,6 +84,7 @@ import com.app.radiator.ui.components.MessageComposer
 import com.app.radiator.ui.components.MessageComposerState
 import com.app.radiator.ui.components.ComposerState
 import com.app.radiator.ui.components.general.CenteredRow
+import com.app.radiator.ui.components.showAddOnToMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -302,6 +303,63 @@ fun RoomTopBar(
   }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ThreadTopBar(
+  avatarData: AvatarData,
+  onSearch: (String) -> Unit,
+) {
+
+  // val interactionSource = remember { MutableInteractionSource() }
+  // val (expanded, setExpanded) = remember { mutableStateOf(false) }
+  val (searchingRoom, setSearchRoom) = remember {
+    mutableStateOf(false)
+  }
+  fun cancelSearch() {
+    setSearchRoom(false)
+  }
+
+  @Composable
+  fun showSearch() {
+    IconButton(onClick = {
+      setSearchRoom(true)
+    }) {
+      Icon(imageVector = Icons.Default.Search, contentDescription = "Search in room for...")
+    }
+  }
+
+  Box(modifier = Modifier.border(width = 2.dp, color = Color.LightGray)) {
+    TopAppBar(
+      title = {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.Start,
+        ) {
+          Avatar(modifier = Modifier, avatarData = avatarData)
+          Spacer(Modifier.width(10.dp))
+          Text(text = avatarData.name!!)
+          Spacer(Modifier.weight(1.0f))
+        }
+      },
+      actions = {
+        if (!searchingRoom) {
+          showSearch()
+        } else {
+          SearchBar(onSearch = onSearch, onDone = { cancelSearch() })
+        }
+        IconButton(onClick = {
+          // setExpanded(true)
+        }) {
+          Icon(
+            imageVector = Icons.Default.MoreVert,
+            contentDescription = "Open Options"
+          )
+        }
+      }
+    )
+  }
+}
+
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun RoomRoute(
@@ -340,7 +398,12 @@ fun RoomRoute(
           val item = clickedItem.value!!.copy(reactions = listOf())
           when (event) {
             MessageDrawerActionType.Reply -> messageComposer.setState(ComposerState.Reply(item))
-            MessageDrawerActionType.ThreadReply -> messageComposer.setState(ComposerState.ThreadReply(item))
+            MessageDrawerActionType.ThreadReply -> messageComposer.setState(
+              ComposerState.ThreadReply(
+                item
+              )
+            )
+
             MessageDrawerActionType.React -> messageComposer.setState(ComposerState.React(item))
             MessageDrawerActionType.Edit -> messageComposer.setState(ComposerState.Edit(item))
             MessageDrawerActionType.Delete, MessageDrawerActionType.Share, MessageDrawerActionType.Quote, MessageDrawerActionType.NewMessage -> {}
@@ -352,6 +415,8 @@ fun RoomRoute(
     Box(modifier = Modifier.background(color = Color.White)) {
       Scaffold(content = { padding ->
         MessageList(
+          navController,
+          timelineState = timelineState,
           padding = padding,
           lazyListState = lazyListState,
           messages = messages,
@@ -418,6 +483,242 @@ fun RoomRoute(
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
+fun ThreadRoute(
+  navController: NavHostController,
+  timelineState: TimelineState,
+  messageComposer: MessageComposerState,
+  threadEventId: String,
+) {
+  val lazyListState = rememberLazyListState()
+  val coroutineScope = rememberCoroutineScope()
+  val messages = timelineState.threadItemFlow(threadEventId).collectAsState()
+  val lastSearchHitIndex = remember { mutableStateOf(0) }
+
+  val itemActionsBottomSheetState = rememberModalBottomSheetState(
+    initialValue = ModalBottomSheetValue.Hidden,
+  )
+
+  val clickedItem: MutableState<TimelineItemVariant.Event?> = remember {
+    mutableStateOf(null)
+  }
+
+  LaunchedEffect(itemActionsBottomSheetState.isVisible) {
+    if (!itemActionsBottomSheetState.isVisible) {
+      clickedItem.value = null
+    }
+  }
+
+  ModalBottomSheetLayout(
+    modifier = Modifier,
+    sheetState = itemActionsBottomSheetState,
+    sheetContent = {
+      MessageDrawerContent { event ->
+        coroutineScope.launch {
+          itemActionsBottomSheetState.hide()
+          val item = clickedItem.value!!.copy(reactions = listOf())
+          when (event) {
+            MessageDrawerActionType.Reply -> messageComposer.setState(ComposerState.Reply(item))
+            MessageDrawerActionType.ThreadReply -> messageComposer.setState(
+              ComposerState.ThreadReply(
+                item
+              )
+            )
+
+            MessageDrawerActionType.React -> messageComposer.setState(ComposerState.React(item))
+            MessageDrawerActionType.Edit -> messageComposer.setState(ComposerState.Edit(item))
+            MessageDrawerActionType.Delete, MessageDrawerActionType.Share, MessageDrawerActionType.Quote, MessageDrawerActionType.NewMessage -> {}
+          }
+        }
+      }
+    }
+  ) {
+    Box(modifier = Modifier.background(color = Color.White)) {
+      Scaffold(content = { padding ->
+        ThreadList(
+          navController,
+          timelineState = timelineState,
+          padding = padding,
+          lazyListState = lazyListState,
+          messages = messages,
+          itemActionsBottomSheetState = itemActionsBottomSheetState,
+          clickedItemPublisher = clickedItem,
+          requestMore = { timelineState.requestMore() }
+        )
+      }, bottomBar = {
+        MessageComposer(messageComposer)
+      }, topBar = {
+        ThreadTopBar(
+          avatarData = timelineState.avatar(),
+          onSearch = { searchString ->
+            coroutineScope.launch {
+              searchTimeline(searchString, lazyListState, lastSearchHitIndex, messages)
+            }
+          },
+        )
+      }, floatingActionButton = {
+        // TODO: _maybe_ have to toggle off when at the bottom, but this comes with an additoinal cost
+        //  it means this composable will get a recomposition triggered _every time the user scrolls_
+        //  - I'm not willing to pay that cost, right now
+        FloatingActionButton(
+          onClick = {
+            coroutineScope.launch {
+              if (messages.value.size - lazyListState.firstVisibleItemIndex > 25) {
+                lazyListState.scrollToItem(messages.value.size)
+              } else {
+                lazyListState.animateScrollToItem(messages.value.size)
+              }
+            }
+          },
+          shape = CircleShape,
+          modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .size(40.dp),
+          containerColor = MaterialTheme.colorScheme.surfaceVariant,
+          contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
+          Icon(Icons.Default.KeyboardArrowDown, "")
+        }
+      }, floatingActionButtonPosition = FabPosition.End
+      )
+
+      // Auto-scroll when new timeline items appear
+      LaunchedEffect(messages.value) {
+        coroutineScope.launch {
+          if (lazyListState.isScrolledToTheEnd() && !lazyListState.isScrollInProgress) {
+            lazyListState.animateScrollToItem(messages.value.size)
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun MessageList(
+  navController: NavHostController,
+  timelineState: TimelineState,
+  padding: PaddingValues,
+  lazyListState: LazyListState,
+  messages: State<List<TimelineItemVariant>>,
+  itemActionsBottomSheetState: ModalBottomSheetState,
+  clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
+  requestMore: () -> Unit,
+) {
+  fun reachedTopOfList(index: Int): Boolean {
+    return index == 0
+  }
+
+  val coroutineScope = rememberCoroutineScope()
+  LazyColumn(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(padding),
+    state = lazyListState,
+    horizontalAlignment = Alignment.Start,
+    verticalArrangement = Arrangement.Bottom,
+    reverseLayout = false
+  ) {
+    itemsIndexed(
+      items = messages.value,
+      contentType = { _, timelineItem -> timelineItem.contentType() },
+      key = { _, timelineItem -> timelineItem.id() },
+    ) { index, timelineItem ->
+      when (timelineItem) {
+        is TimelineItemVariant.Event -> {
+          if (timelineItem.userCanSee && timelineItem.threadId == null) {
+            RoomMessageItem(
+              item = timelineItem,
+              onClick = {
+                if (timelineState.threadRoots.contains(timelineItem.eventId)) {
+                  navController.navigate(Routes.Thread.route + "/${timelineItem.eventId}/${timelineState.roomId}")
+                } else {
+                  Log.d("RoomMessageItemClick", "Clicked message item $timelineItem.eventId")
+                }
+              },
+              onClickHold = {
+                coroutineScope.launch {
+                  itemActionsBottomSheetState.show()
+                  clickedItemPublisher.value = it
+                }
+              },
+            )
+          }
+        }
+
+        is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
+        TimelineItemVariant.Unknown -> {}
+        is TimelineItemVariant.Fill -> {}
+      }
+
+      if (reachedTopOfList(index)) {
+        requestMore()
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun ThreadList(
+  navController: NavHostController,
+  timelineState: TimelineState,
+  padding: PaddingValues,
+  lazyListState: LazyListState,
+  messages: State<List<TimelineItemVariant>>,
+  itemActionsBottomSheetState: ModalBottomSheetState,
+  clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
+  requestMore: () -> Unit,
+) {
+  fun reachedTopOfList(index: Int): Boolean {
+    return index == 0
+  }
+
+  val coroutineScope = rememberCoroutineScope()
+  LazyColumn(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(padding),
+    state = lazyListState,
+    horizontalAlignment = Alignment.Start,
+    verticalArrangement = Arrangement.Bottom,
+    reverseLayout = false
+  ) {
+    itemsIndexed(
+      items = messages.value,
+      contentType = { _, timelineItem -> timelineItem.contentType() },
+      key = { _, timelineItem -> timelineItem.id() },
+    ) { index, timelineItem ->
+      when (timelineItem) {
+        is TimelineItemVariant.Event -> {
+          RoomMessageItem(
+            item = timelineItem,
+            onClick = {
+              Log.d("RoomMessageItemClick", "Clicked message item $timelineItem.eventId")
+            },
+            onClickHold = {
+              coroutineScope.launch {
+                itemActionsBottomSheetState.show()
+                clickedItemPublisher.value = it
+              }
+            },
+          )
+        }
+
+        is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
+        TimelineItemVariant.Unknown -> {}
+        is TimelineItemVariant.Fill -> {}
+      }
+
+      if (reachedTopOfList(index)) {
+        requestMore()
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
 fun MessageList(
   padding: PaddingValues,
   lazyListState: LazyListState,
@@ -425,6 +726,7 @@ fun MessageList(
   itemActionsBottomSheetState: ModalBottomSheetState,
   clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
   requestMore: () -> Unit,
+  threadId: String?,
 ) {
   fun reachedTopOfList(index: Int): Boolean {
     return index == 0

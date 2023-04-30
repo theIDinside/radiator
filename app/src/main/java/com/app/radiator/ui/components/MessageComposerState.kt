@@ -178,8 +178,8 @@ class MessageComposerState(
   }
 }
 
-fun showAddOnToMessage(toastContext: Context) {
-  Toast.makeText(toastContext, "Add images, links, etc...", Toast.LENGTH_LONG).show()
+fun showAddOnToMessage(toastContext: Context, string: String) {
+  Toast.makeText(toastContext, string, Toast.LENGTH_LONG).show()
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -203,7 +203,7 @@ fun DisplayComposerEditor(messageComposer: MessageComposerState) {
             .background(color = Color.White)
             .size(35.dp)
             .offset(x = 2.5.dp),
-          onClick = { showAddOnToMessage(mContext) },
+          onClick = { showAddOnToMessage(mContext, "Add images, links, etc...") },
           colors = ButtonDefaults.buttonColors(
             containerColor = Color.LightGray,
             contentColor = Color.Black,

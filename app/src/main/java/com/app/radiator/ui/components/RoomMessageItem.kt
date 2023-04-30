@@ -77,7 +77,8 @@ val preview = TimelineItemVariant.Event(
   message = Message.Text(
     body = "Text message", inReplyTo = null, isEdited = false, formatted = null
   ),
-  groupedByUser = false
+  groupedByUser = false,
+  threadId = null
 )
 
 val RoomViewLeftOffset = 7.dp
