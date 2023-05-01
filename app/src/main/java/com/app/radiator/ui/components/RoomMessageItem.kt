@@ -140,7 +140,7 @@ fun TestTwoTextFieldsAsNewline() {
     Text(text = "Foo\nBar")
   }
 }
-
+// TODO: write actual click handlers for our custom "DOM tree" nodes
 val parsedNodeClickHandlerLogger: (node: ParsedMessageNode) -> Unit = {
   when (it) {
     is ParsedMessageNode.CodeBlock -> Log.d(

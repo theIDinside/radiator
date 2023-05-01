@@ -123,7 +123,7 @@ class TimelineStateObject(
     return isInitialized.map { it }
   }
 
-  override suspend fun withLock(block: () -> Unit) {
+  override suspend fun withLockOnState(block: () -> Unit) {
     mutex.withLock { block() }
   }
 
@@ -263,7 +263,7 @@ class TimelineStateObject(
   override fun onUpdate(update: TimelineDiff) {
     superVisorCoroutineScope.launch {
       withContext(applyDiffDispatcher) {
-        withLock {
+        withLockOnState {
           update.use {
             patchDiff(it)
           }

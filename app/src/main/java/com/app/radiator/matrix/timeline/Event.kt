@@ -578,7 +578,7 @@ fun org.matrix.rustcomponents.sdk.Message.marshal(
         try {
           messageBuilder.parse(mxStripped.body)
         } catch (ex: Exception) {
-          Log.d("HTMLParse", "Parse failed: $ex on contents ${mxStripped.body}")
+          Log.d("Process Event Content", "Parse failed: $ex on contents:\n'${mxStripped.body}'")
           null
         }
       } else null

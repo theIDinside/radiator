@@ -17,7 +17,7 @@ interface ITimeline : TimelineListener {
   fun threadItemFlow(threadId: String): StateFlow<List<IEvent>>
   fun isInit(): Flow<Boolean>
 
-  suspend fun withLock(block: () -> Unit)
+  suspend fun withLockOnState(block: () -> Unit)
   fun patchDiff(diff: TimelineDiff)
 
   /// Updates

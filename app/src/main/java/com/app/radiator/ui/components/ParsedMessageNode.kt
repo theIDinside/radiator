@@ -28,8 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,8 +109,6 @@ sealed interface ParsedMessageNode {
           onClickedEvent(this)
         },
         text = linkText,
-        textDecoration = TextDecoration.Underline,
-        fontWeight = FontWeight.Bold,
         overflow = TextOverflow.Ellipsis,
       )
     }

@@ -4,10 +4,14 @@ import android.text.SpannableString
 import android.text.style.URLSpan
 import android.text.util.Linkify.PHONE_NUMBERS
 import android.text.util.Linkify.WEB_URLS
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.core.text.util.LinkifyCompat
 import com.app.radiator.ui.components.ParsedMessageNode
@@ -22,7 +26,7 @@ val whiteListedTags = setOf(
   "h4",
   "h5",
   "h6",
-  "blockquote",
+  "blockquote", // we disallow this tag, but the matrix spec says we should allow it. It just becomes cumbersome for us
   "p",
   "a",
   "ul",
@@ -58,27 +62,36 @@ val whiteListedTags = setOf(
 //  thus, H1-H6 needs to be at index 1 (position 2)
 enum class Tag {
   // HTML Elements
-  PARAGRAPH, H1, H2, H3, H4, H5, H6, OL, UL, LI, PRE, CODE, A,
-
+  P, H1, H2, H3, H4, H5, H6, OL, UL, LI, PRE, CODE, A, EM, I, STRONG, DEL,
   // Our own Pseudo-HTML-elements
   Root, InnerTextNode
 }
 
-val TagMap = mapOf(
-  "ol" to Tag.OL,
-  "ul" to Tag.UL,
-  "li" to Tag.LI,
-  "pre" to Tag.PRE,
-  "code" to Tag.CODE,
-  "h1" to Tag.H1,
-  "h2" to Tag.H2,
-  "h3" to Tag.H3,
-  "h4" to Tag.H4,
-  "h5" to Tag.H5,
-  "h6" to Tag.H6,
-  "p" to Tag.PARAGRAPH,
-  "a" to Tag.A
-)
+enum class FontStyleType { Strong, Emphasis, Italic, Underline, StrikeThrough }
+
+fun Tag.fromTag(): FontStyleType {
+  return when(this) {
+    Tag.EM -> FontStyleType.Emphasis
+    Tag.I -> FontStyleType.Italic
+    Tag.STRONG -> FontStyleType.Strong
+    Tag.DEL -> FontStyleType.StrikeThrough
+    else -> throw Exception("Tag is not a 'font style' type")
+  }
+}
+
+fun FontStyleType.spanStyle() : SpanStyle {
+  return when(this) {
+    FontStyleType.Strong -> SpanStyle(fontWeight = FontWeight.ExtraBold)
+    FontStyleType.Emphasis -> SpanStyle(fontStyle = FontStyle.Italic)
+    FontStyleType.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
+    FontStyleType.Underline -> SpanStyle(textDecoration = TextDecoration.Underline)
+    FontStyleType.StrikeThrough -> SpanStyle(textDecoration = TextDecoration.LineThrough)
+  }
+}
+
+val PseudoTags = listOf(Tag.Root, Tag.InnerTextNode)
+
+val TagMap = Tag.values().filterNot { PseudoTags.contains(it) }.associateBy { it.name.lowercase() }.toMap()
 
 fun findClose(start: Int, input: String): Int = input.indexOf(startIndex = start + 1, char = '>')
 
@@ -136,8 +149,7 @@ fun parseTag(start: Int, input: String): ParsedTag {
 
   // TODO: This will fail strangely when we encounter an unknown element
   return try {
-    val tag =
-      sub.toTag() ?: throw Exception("Parsing tag failed: '$sub' could not be recognized as a tag")
+    val tag = sub.toTag()
     val tagSpan = start..end
     if (tagNameStarts == start) ParsedTag.OpenTag(tagSpan = tagSpan, tag = tag)
     else ParsedTag.CloseTag(tagSpan = tagSpan, tag = tag)
@@ -145,9 +157,9 @@ fun parseTag(start: Int, input: String): ParsedTag {
     // if the tag hade classes etc - that's pretty rare though
     val space = sub.indexOf(' ')
     val tag = try {
-      sub.subSequence(0, space).toTag()!!
+      sub.subSequence(0, space).toTag()
     } catch (ex: Exception) {
-      throw Exception("$ex. Doc contents: $input")
+      throw Exception("$ex. At position $start in document. Doc contents: $input")
     }
     val tagSpan = start..end
     ParsedTag.OpenTag(tagSpan = tagSpan, tag = tag)
@@ -155,11 +167,8 @@ fun parseTag(start: Int, input: String): ParsedTag {
 }
 
 
-fun CharSequence.toTag(): Tag? {
-  if (TagMap[this] == null) {
-    throw Exception("Failed to tokenize string input $this")
-  }
-  return TagMap[this]
+fun CharSequence.toTag(): Tag {
+  return TagMap[this] ?: throw Exception("Failed to tokenize string input $this")
 }
 
 // Abstract type that also aims to represent itself as the root node
@@ -240,7 +249,7 @@ class DomCodeNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(op
   }
 
   override fun addNode(node: DomNode) {
-    if (::innerTextNode.isInitialized) throw Exception("Inner Text Node already added to this <CODE> node")
+    if (::innerTextNode.isInitialized) throw Exception("Inner Text Node already added to this <CODE> node. Faulty tag to be added begins at ${node.openTag.docIdxStart()}")
     if (node !is DomTextNode) throw Exception("The only child node supported for <CODE> nodes right now is a single pseudo html TextNode but was $node")
     innerTextNode = node
   }
@@ -353,10 +362,56 @@ class DomTextNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) : DomNode(op
 
 const val HREF = "href=\""
 
+class DomFontStyleNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?, private val fontStyle: FontStyleType) : DomNode(openTag, parentNode) {
+  lateinit var innerTextNode: DomTextNode
+  override fun build(doc: String): ParsedMessageNode? {
+    val contentsStart = openTag.innerContentsShouldStart()
+    val contentsEnd = closeTag.innerContentsShouldEnd()
+    val text = doc.subSequence(contentsStart, contentsEnd).toString()
+    return if (text == "\n") null
+    else {
+      val annotatedString = buildAnnotatedString {
+        val spanStyle = fontStyle.spanStyle()
+        withStyle(spanStyle) {
+          append(text)
+          val textSpan = SpannableString(text)
+          LinkifyCompat.addLinks(textSpan, WEB_URLS or PHONE_NUMBERS)
+          for (span in textSpan.getSpans(0, textSpan.length, URLSpan::class.java)) {
+            val begin = textSpan.getSpanStart(span)
+            val end = textSpan.getSpanEnd(span)
+            addStyle(start = begin, end = end, style = SpanStyle(color = LinkColor))
+            addStringAnnotation(tag = "URL", annotation = span.url, start = begin, end = end)
+          }
+        }
+      }
+      ParsedMessageNode.TextNode(text = annotatedString)
+    }
+  }
+
+  override fun addNode(node: DomNode) {
+    if (::innerTextNode.isInitialized) throw Exception("Inner Text Node already added to this <EM> or <I> node")
+    if (node !is DomTextNode) throw Exception("The only child node supported for <EM> or <I> nodes right now is a single pseudo html TextNode but was $node")
+    innerTextNode = node
+  }
+
+  override fun canOpenTag(tag: Tag): Boolean = false
+
+  override fun canCloseTag(tag: Tag): Boolean {
+    return when(this.fontStyle) {
+      FontStyleType.Emphasis -> tag == Tag.EM
+      FontStyleType.Italic -> tag == Tag.I
+      FontStyleType.Strong -> tag == Tag.STRONG
+      FontStyleType.Underline -> TODO("Parsing of underline font styling not implemented")
+      FontStyleType.StrikeThrough -> TODO("Parsing of strike-through font styling not implemented")
+    }
+  }
+}
+
+
 class DomAHrefNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
   DomNode(openTag, parentNode) {
   lateinit var linkTextNode: DomTextNode
-  fun parseUrl(subSequence: CharSequence): String {
+  private fun parseUrl(subSequence: CharSequence): String {
     val pos = subSequence.indexOf(HREF)
     var lastPosOfQuote = pos
     var idx = pos
@@ -372,7 +427,7 @@ class DomAHrefNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
     val start = openTag.innerContentsShouldStart()
     val end = closeTag.innerContentsShouldEnd()
     val url = parseUrl(doc.subSequence(openTag.docIdxStart(), openTag.docTagIdxEnd()))
-    val linkColor = Color.Blue
+    val linkColor = Color(35, 140, 245)
     val linkText = buildAnnotatedString {
       withStyle(SpanStyle(color = linkColor)) {
         append(doc.substring(start, end))
@@ -390,7 +445,6 @@ class DomAHrefNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?) :
 
   override fun canOpenTag(tag: Tag): Boolean = false
   override fun canCloseTag(tag: Tag): Boolean = tag == Tag.A
-
 }
 
 // TODO(simon): implement plugin functionality where we can inject our own parsing plugins.
@@ -452,10 +506,10 @@ class HTMLParser(val blackListedTags: Set<String> = setOf()) {
           is ParsedTag.OpenTag -> {
             // if we're seeing a new tag, close any innerText node we're parsing and add it to the current
             // node we're in (not the to be opened node, the current)
-            if(currentInnerTextNode != null) {
-              currentInnerTextNode = closeInnerText(currNode!!, currentInnerTextNode, pos)
-            }
             if (currNode?.canOpenTag(tag.tag) == true) {
+              if (currentInnerTextNode != null) {
+                currentInnerTextNode = closeInnerText(currNode, currentInnerTextNode, pos)
+              }
               val newNode = when (tag.tag) {
                 Tag.OL -> {
                   DomOrderedList(openTag = tag, parentNode = currNode)
@@ -475,13 +529,19 @@ class HTMLParser(val blackListedTags: Set<String> = setOf()) {
                 Tag.H1, Tag.H2, Tag.H3, Tag.H4, Tag.H5, Tag.H6 -> {
                   DomHeadingNode(openTag = tag, parentNode = currNode)
                 }
+
                 Tag.Root -> DomRootNode(openTag = tag, parentNode = currNode)
                 Tag.InnerTextNode -> throw Exception("Pseudo nodes can't be parsed from document text; we create them after the fact")
-                Tag.PARAGRAPH -> DomParagraphNode(openTag = tag, parentNode = currNode)
+                Tag.P -> DomParagraphNode(openTag = tag, parentNode = currNode)
                 Tag.A -> DomAHrefNode(openTag = tag, parentNode = currNode)
+                Tag.EM, Tag.I, Tag.STRONG, Tag.DEL -> DomFontStyleNode(openTag = tag, parentNode = currNode, tag.tag.fromTag())
               }
-              currNode.addNode(newNode)
-              currNode = newNode
+              try {
+                currNode.addNode(newNode)
+                currNode = newNode
+              } catch(ex: Exception) {
+                Log.d("HTML Parse", "Couldn't add node $newNode to $currNode: $ex")
+              }
             }
             pos = tag.docIdxEnd()
           }
