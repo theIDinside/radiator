@@ -41,6 +41,20 @@ data class CompressedAvatarData(
     inflater.end()
     return BitmapFactory.decodeByteArray(output, 0, output.size).asImageBitmap()
   }
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (javaClass != other?.javaClass) return false
+    other as CompressedAvatarData
+    return avatarUrl != other.avatarUrl
+  }
+
+  override fun hashCode(): Int {
+    var result = avatarUrl.hashCode()
+    result = 31 * result + data.contentHashCode()
+    result = 31 * result + uncompressedSize
+    return result
+  }
 }
 
 class AvatarDataStorage(val filePath: String) {

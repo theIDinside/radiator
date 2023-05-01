@@ -55,8 +55,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.app.radiator.matrix.timeline.TimelineItemVariant
-import com.app.radiator.matrix.timeline.TimelineState
+import com.app.radiator.matrix.timeline.IEvent
+import com.app.radiator.matrix.timeline.ITimeline
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.AvatarData
 import com.app.radiator.ui.components.ComposerState
@@ -131,7 +131,7 @@ fun ThreadTopBar(
 @Composable
 fun ThreadRoute(
   navController: NavHostController,
-  timelineState: TimelineState,
+  timelineState: ITimeline,
   messageComposer: MessageComposerState,
   threadEventId: String,
 ) {
@@ -144,7 +144,7 @@ fun ThreadRoute(
     initialValue = ModalBottomSheetValue.Hidden,
   )
 
-  val clickedItem: MutableState<TimelineItemVariant.Event?> = remember {
+  val clickedItem: MutableState<IEvent.Event?> = remember {
     mutableStateOf(null)
   }
 
@@ -237,12 +237,12 @@ fun ThreadRoute(
 @Composable
 fun ThreadList(
   navController: NavHostController,
-  timelineState: TimelineState,
+  timelineState: ITimeline,
   padding: PaddingValues,
   lazyListState: LazyListState,
-  messages: State<List<TimelineItemVariant>>,
+  messages: State<List<IEvent>>,
   itemActionsBottomSheetState: ModalBottomSheetState,
-  clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
+  clickedItemPublisher: MutableState<IEvent.Event?>,
   requestMore: () -> Unit,
 ) {
   fun reachedTopOfList(index: Int): Boolean {
@@ -262,10 +262,10 @@ fun ThreadList(
     itemsIndexed(
       items = messages.value,
       contentType = { _, timelineItem -> timelineItem.contentType() },
-      key = { _, timelineItem -> timelineItem.id() },
+      key = { _, timelineItem -> timelineItem.lazyListId() },
     ) { index, timelineItem ->
       when (timelineItem) {
-        is TimelineItemVariant.Event -> {
+        is IEvent.Event -> {
           RoomMessageItem(
             item = timelineItem,
             onClick = {
@@ -280,9 +280,9 @@ fun ThreadList(
           )
         }
 
-        is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
-        TimelineItemVariant.Unknown -> {}
-        is TimelineItemVariant.Fill -> {}
+        is IEvent.Virtual -> VirtualItem(timelineItem = timelineItem)
+        IEvent.Unknown -> {}
+        is IEvent.Fill -> {}
       }
 
       if (reachedTopOfList(index)) {

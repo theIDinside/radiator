@@ -88,7 +88,7 @@ sealed interface ParsedMessageNode {
       fun doRow(node: ParsedMessageNode) {
         node.Display(modifier = modifier, textStyle, onClickedEvent, onLongClick = onLongClick)
       }
-      Column() {
+      Column {
         FlowRow {
           for (child in children) {
             doRow(child)
@@ -160,7 +160,7 @@ sealed interface ParsedMessageNode {
       onClickedEvent: (ParsedMessageNode) -> Unit,
       onLongClick: () -> Unit,
     ) {
-      Column() {
+      Column {
         for (item in list) {
           Row(
             horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -206,7 +206,7 @@ sealed interface ParsedMessageNode {
       onLongClick: () -> Unit,
     ) {
       val style = headingStyle(size = size)
-      Row() {
+      Row {
         for (item in items) {
           item.Display(modifier, style, onClickedEvent, onLongClick = onLongClick)
         }

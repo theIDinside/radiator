@@ -63,14 +63,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
 import com.app.radiator.Routes
+import com.app.radiator.matrix.timeline.IEvent
+import com.app.radiator.matrix.timeline.ITimeline
 import com.app.radiator.matrix.timeline.Message
-import com.app.radiator.matrix.timeline.TimelineItemVariant
 import com.app.radiator.matrix.timeline.VirtualTimelineItem
 import com.app.radiator.ui.components.AvatarData
 import com.app.radiator.ui.components.DayDivider
 import com.app.radiator.ui.components.RoomMessageItem
 import com.app.radiator.matrix.timeline.ProfileDetails
-import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.LoadingAnimation
 import com.app.radiator.ui.components.MessageDrawerContent
@@ -255,13 +255,13 @@ fun RoomTopBar(
 @Composable
 fun RoomRoute(
   navController: NavHostController,
-  timelineState: TimelineState,
+  timelineState: ITimeline,
   messageComposer: MessageComposerState,
 ) {
 
   val lazyListState = rememberLazyListState()
   val coroutineScope = rememberCoroutineScope()
-  val messages = timelineState.currentStateFlow.collectAsState(emptyList())
+  val messages = timelineState.subscribeTimeline().collectAsState(emptyList())
   val contextForToast = LocalContext.current.applicationContext
   val lastSearchHitIndex = remember { mutableStateOf(0) }
 
@@ -269,7 +269,7 @@ fun RoomRoute(
     initialValue = ModalBottomSheetValue.Hidden,
   )
 
-  val clickedItem: MutableState<TimelineItemVariant.Event?> = remember {
+  val clickedItem: MutableState<IEvent.Event?> = remember {
     mutableStateOf(null)
   }
 
@@ -321,7 +321,7 @@ fun RoomRoute(
             }
           },
           onRoomDetailsClick = {
-            navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId}")
+            navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId()}")
             Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG)
               .show()
           },
@@ -371,17 +371,19 @@ fun RoomRoute(
 @Composable
 fun MessageList(
   navController: NavHostController,
-  timelineState: TimelineState,
+  timelineState: ITimeline,
   padding: PaddingValues,
   lazyListState: LazyListState,
-  messages: State<List<TimelineItemVariant>>,
+  messages: State<List<IEvent>>,
   itemActionsBottomSheetState: ModalBottomSheetState,
-  clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
+  clickedItemPublisher: MutableState<IEvent.Event?>,
   requestMore: () -> Unit,
 ) {
   fun reachedTopOfList(index: Int): Boolean {
     return index == 0
   }
+
+  val paginationState = remember { timelineState.canUpdateStateProducer().value }
 
   val coroutineScope = rememberCoroutineScope()
   LazyColumn(
@@ -396,16 +398,16 @@ fun MessageList(
     itemsIndexed(
       items = messages.value,
       contentType = { _, timelineItem -> timelineItem.contentType() },
-      key = { _, timelineItem -> timelineItem.id() },
+      key = { _, timelineItem -> timelineItem.lazyListId() },
     ) { index, timelineItem ->
       when (timelineItem) {
-        is TimelineItemVariant.Event -> {
+        is IEvent.Event -> {
           if (timelineItem.userCanSee && timelineItem.threadDetails == null) {
             RoomMessageItem(
               item = timelineItem,
               onClick = {
-                if (timelineState.threadRoots.contains(timelineItem.eventId)) {
-                  navController.navigate(Routes.Thread.route + "/${timelineItem.eventId}/${timelineState.roomId}")
+                if (timelineState.timelineHasThread(timelineItem.eventId)) {
+                  navController.navigate(Routes.Thread.route + "/${timelineItem.eventId}/${timelineState.roomId()}")
                 } else {
                   Log.d("RoomMessageItemClick", "Clicked message item $timelineItem.eventId")
                 }
@@ -420,12 +422,12 @@ fun MessageList(
           }
         }
 
-        is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
-        TimelineItemVariant.Unknown -> {}
-        is TimelineItemVariant.Fill -> {}
+        is IEvent.Virtual -> VirtualItem(timelineItem = timelineItem)
+        IEvent.Unknown -> {}
+        is IEvent.Fill -> {}
       }
 
-      if (reachedTopOfList(index)) {
+      if (reachedTopOfList(index) && paginationState.hasMore) {
         requestMore()
       }
     }
@@ -436,7 +438,7 @@ suspend fun searchTimeline(
   searchString: String,
   lazyListState: LazyListState,
   lastSearchHitIndex: MutableState<Int>,
-  messages: State<List<TimelineItemVariant>>,
+  messages: State<List<IEvent>>,
 ) {
   withContext(Dispatchers.IO) {
     var idx = lastSearchHitIndex.value
@@ -444,7 +446,7 @@ suspend fun searchTimeline(
     var found = false
     try {
       for (item in messages.value.subList(lastFound, messages.value.size)) {
-        if (item is TimelineItemVariant.Event && item.message is Message.Text) {
+        if (item is IEvent.Event && item.message is Message.Text) {
           if (idx != lastFound && item.message.body.contains(searchString)) {
             found = true
             break
@@ -468,7 +470,7 @@ suspend fun searchTimeline(
 }
 
 @Composable
-fun VirtualItem(timelineItem: TimelineItemVariant.Virtual) {
+fun VirtualItem(timelineItem: IEvent.Virtual) {
   Spacer(modifier = Modifier.height(5.dp))
   CenteredRow(
     modifier = Modifier.fillMaxWidth(),

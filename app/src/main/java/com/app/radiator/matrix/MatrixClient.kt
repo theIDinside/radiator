@@ -3,8 +3,11 @@ package com.app.radiator.matrix
 import android.util.Log
 import androidx.compose.ui.text.AnnotatedString
 import com.app.radiator.*
-import com.app.radiator.matrix.timeline.TimelineState
+import com.app.radiator.matrix.timeline.IEvent
+import com.app.radiator.matrix.timeline.ITimeline
+import com.app.radiator.matrix.timeline.TimelineStateObject
 import com.app.radiator.matrix.timeline.displayName
+import com.app.radiator.matrix.timeline.marshal
 import com.app.radiator.ui.components.RoomSummary
 import com.app.radiator.ui.components.avatarData
 import kotlinx.collections.immutable.toImmutableList
@@ -63,7 +66,7 @@ private fun saveSerializedSession(session: Session) {
 }
 
 class UnexpectedFormat(additionalInfo: String = "") :
-  Exception("File contained unexpected format. $additionalInfo") {}
+  Exception("File contained unexpected format. $additionalInfo")
 
 fun deserializeSession(): Session? {
   val sessionFileName = "session"
@@ -117,7 +120,7 @@ interface SummaryFlow : SlidingSyncObserver {
 
 typealias RoomId = String
 
-interface SlidingSyncRoomManager : Disposable {
+interface SlidingSyncRoomManager<EventsType> : Disposable {
   fun pushFront(roomId: RoomId)
   fun pushBack(roomId: RoomId)
   fun popBack()
@@ -137,7 +140,7 @@ interface SlidingSyncRoomManager : Disposable {
   fun getSlidingSyncRoom(roomId: String): SlidingSyncRoom
 
   fun disposeOfTimelineState()
-  fun getTimelineState(roomId: String): TimelineState
+  fun getTimelineState(roomId: String): ITimeline
 }
 
 // Make _all_ wrapped types public. Everything else, is fucking stupid.
@@ -183,10 +186,10 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
   /// Companion object manages the SlidingSync rooms that we've been sent so far
   /// It is also responsible for producing the final data output that is given to
   /// jetpack compose to render in the form of `RoomSummary`
-  val slidingSyncRoomManager = object : SlidingSyncRoomManager {
+  val slidingSyncRoomManager = object : SlidingSyncRoomManager<IEvent> {
     val slidingSyncRoomsMap = HashMap<String, SlidingSyncRoom>()
     val slidingSyncRoomList = ArrayList<RoomId>()
-    var timelineState: TimelineState? = null
+    var timelineState: TimelineStateObject? = null
 
     private fun list() = slidingSyncRoomList
 
@@ -222,15 +225,14 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
       timelineState = null
     }
 
-    override fun getTimelineState(roomId: String): TimelineState {
+    override fun getTimelineState(roomId: String): TimelineStateObject {
       if(timelineState?.roomId == roomId) return timelineState!!
       if(timelineState != null) throw Exception("Previously cached timeline state not diposed of")
-
-      timelineState = TimelineState(
-        roomId= roomId,
-        slidingSyncRoomsMap[roomId]!!,
-        superVisorCoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
-        diffApplyDispatcher = dispatchers.diffUpdateDispatcher
+      val slidingSyncRoom = slidingSyncRoomsMap[roomId]!!
+      timelineState = TimelineStateObject(
+        slidingSyncRoom,
+        CoroutineScope(SupervisorJob() + dispatchers.io),
+        dispatchers.diffUpdateDispatcher
       )
       return timelineState!!
     }
@@ -255,7 +257,7 @@ class MatrixClient constructor(val dispatchers: CoroutineDispatchers = defaultDi
               is MessageType.Emote -> type.content.body
               is MessageType.File -> type.content.body
               is MessageType.Image -> {
-                it.senderProfile().displayName()?.let { userName ->
+                it.senderProfile().marshal().displayName()?.let { userName ->
                   "$userName sent ${type.content.body}"
                 } ?: type.content.body
               }
