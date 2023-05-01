@@ -75,10 +75,11 @@ val preview = TimelineItemVariant.Event(
   ),
   timestamp = 0u,
   message = Message.Text(
-    body = "Text message", inReplyTo = null, isEdited = false, formatted = null
+    body = "Text message", isEdited = false, formatted = null
   ),
   groupedByUser = false,
-  threadId = null
+  threadDetails = null,
+  inReplyTo = null
 )
 
 val RoomViewLeftOffset = 7.dp
@@ -253,7 +254,9 @@ fun RoomMessageItem(
                   onClickHold = {
                     onClickHold(item)
                   },
-                  interactionSource = interactionSource
+                  interactionSource = interactionSource,
+                  inReplyTo = item.inReplyTo,
+                  is_in_thread_reply = item.threadDetails?.let { !it.isFallback } ?: true
                 )
               }
 
@@ -328,9 +331,11 @@ fun RoomTextMessage(
   onClick: () -> Unit,
   onClickHold: () -> Unit,
   interactionSource: MutableInteractionSource,
+  inReplyTo: InReplyToDetails?,
+  is_in_thread_reply: Boolean = true,
 ) {
-  if (textMsg.inReplyTo != null) {
-    when (val innerItem = textMsg.inReplyTo.event) {
+  if (inReplyTo != null && is_in_thread_reply) {
+    when (val innerItem = inReplyTo.event) {
       is RepliedToEventDetails.Ready -> {
         when (val msg = innerItem.message) {
           is Message.Text -> {

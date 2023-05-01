@@ -173,7 +173,7 @@ class MessageComposerState(
         this.msgContent.value, act.eventId
       )
     }
-    timeline.send(timelineAction)
+    timeline.timelineSend(timelineAction)
     setState(ComposerState.NewMessage)
   }
 }
