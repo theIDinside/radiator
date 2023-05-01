@@ -133,7 +133,6 @@ class MainActivity : ComponentActivity() {
                 val roomId = it.arguments?.getString("roomId")
                 Text("Room details for $roomId")
               }
-              /*
               composable(Routes.Thread.route + "/{eventId}/{roomId}") {
                 val roomId = it.arguments?.getString("roomId")
                 val eventId = it.arguments?.getString("eventId")!!
@@ -142,7 +141,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val composer = MessageComposerState(rememberCoroutineScope(), timelineState)
                 ThreadRoute(navController = navController, timelineState = timelineState, composer, eventId)
-              }*/
+              }
             }
           }
         }
