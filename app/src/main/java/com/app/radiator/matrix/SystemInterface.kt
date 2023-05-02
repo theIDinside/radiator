@@ -113,8 +113,7 @@ fun applicationSetup(app: Application) {
   SystemInterface.basePathFile = File(app.applicationContext.filesDir, "session")
   SDKLogging.setLoggingFor(
     listOf(
-      SDKModule.SlidingSync.level(SDKLogLevels.Trace),
-      SDKModule.BaseSlidingSync.level(SDKLogLevels.Trace)
+      // SDKModule.SlidingSync.level(SDKLogLevels.Trace), SDKModule.BaseSlidingSync.level(SDKLogLevels.Trace)
     )
   )
   setupLogging()

@@ -12,17 +12,21 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.ModalBottomSheetLayout
 import androidx.compose.material.ModalBottomSheetState
 import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.rememberModalBottomSheetState
@@ -34,10 +38,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -49,18 +51,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -68,22 +63,25 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.navigation.NavHostController
 import com.app.radiator.Routes
+import com.app.radiator.matrix.timeline.IEvent
+import com.app.radiator.matrix.timeline.ITimeline
 import com.app.radiator.matrix.timeline.Message
-import com.app.radiator.matrix.timeline.TimelineItemVariant
 import com.app.radiator.matrix.timeline.VirtualTimelineItem
 import com.app.radiator.ui.components.AvatarData
 import com.app.radiator.ui.components.DayDivider
 import com.app.radiator.ui.components.RoomMessageItem
 import com.app.radiator.matrix.timeline.ProfileDetails
-import com.app.radiator.matrix.timeline.TimelineState
 import com.app.radiator.ui.components.Avatar
 import com.app.radiator.ui.components.LoadingAnimation
-import com.app.radiator.ui.components.MessageDrawerActionType
 import com.app.radiator.ui.components.MessageDrawerContent
 import com.app.radiator.ui.components.MessageComposer
 import com.app.radiator.ui.components.MessageComposerState
 import com.app.radiator.ui.components.ComposerState
+import com.app.radiator.ui.components.MessageDrawerAction
+import com.app.radiator.ui.components.MessageDrawerContentInterface
+import com.app.radiator.ui.components.SearchBar
 import com.app.radiator.ui.components.general.CenteredRow
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -135,55 +133,6 @@ sealed class DropDownMenuItems(
 @Composable
 fun PreviewSearchBar() {
   SearchBar(onSearch = {}, onDone = {})
-}
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-fun SearchBar(onSearch: (String) -> Unit, onDone: () -> Unit) {
-  val (messageInput, setMessage) = remember { mutableStateOf("") }
-  val keyboardController = LocalSoftwareKeyboardController.current
-  val focusRequester = remember { FocusRequester() }
-  Row(
-    modifier = Modifier.background(color = Color.White),
-    verticalAlignment = Alignment.CenterVertically
-  ) {
-    OutlinedTextField(
-      modifier = Modifier
-        .fillMaxWidth()
-        .focusTarget()
-        .weight(0.5f)
-        .focusRequester(focusRequester),
-      value = messageInput,
-      colors = TextFieldDefaults.colors(
-        focusedContainerColor = Color.White,
-        unfocusedContainerColor = Color.White
-      ),
-      textStyle = TextStyle(fontSize = 14.sp),
-      onValueChange = setMessage,
-      keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-      keyboardActions = KeyboardActions(
-        onSend = {
-          onSearch(messageInput)
-        }, onDone = {
-          keyboardController?.hide()
-          onDone()
-        }, onNext = {
-
-        }),
-      label = { Text("Search for...") },
-      trailingIcon = {
-        Icon(
-          imageVector = Icons.Default.Close,
-          contentDescription = "Exit search mode",
-          modifier = Modifier.clickable {
-            onDone()
-          })
-      }
-    )
-  }
-  LaunchedEffect(Unit) {
-    focusRequester.requestFocus()
-  }
 }
 
 @Preview
@@ -306,13 +255,13 @@ fun RoomTopBar(
 @Composable
 fun RoomRoute(
   navController: NavHostController,
-  timelineState: TimelineState,
-  messageComposer: MessageComposerState
+  timelineState: ITimeline,
+  messageComposer: MessageComposerState,
 ) {
 
   val lazyListState = rememberLazyListState()
   val coroutineScope = rememberCoroutineScope()
-  val messages = timelineState.currentStateFlow.collectAsState(emptyList())
+  val messages = timelineState.subscribeTimeline().collectAsState(emptyList())
   val contextForToast = LocalContext.current.applicationContext
   val lastSearchHitIndex = remember { mutableStateOf(0) }
 
@@ -320,7 +269,7 @@ fun RoomRoute(
     initialValue = ModalBottomSheetValue.Hidden,
   )
 
-  val clickedItem: MutableState<TimelineItemVariant.Event?> = remember {
+  val clickedItem: MutableState<IEvent.Event?> = remember {
     mutableStateOf(null)
   }
 
@@ -334,16 +283,31 @@ fun RoomRoute(
     modifier = Modifier,
     sheetState = itemActionsBottomSheetState,
     sheetContent = {
-      MessageDrawerContent { event ->
+      MessageDrawerContent(TimelineMessageDrawer) { event ->
         coroutineScope.launch {
           itemActionsBottomSheetState.hide()
           val item = clickedItem.value!!.copy(reactions = listOf())
-          when(event) {
-            MessageDrawerActionType.Reply -> messageComposer.setState(ComposerState.Reply(item))
-            MessageDrawerActionType.ThreadReply -> messageComposer.setState(ComposerState.ThreadReply(item))
-            MessageDrawerActionType.React -> messageComposer.setState(ComposerState.React(item))
-            MessageDrawerActionType.Edit -> messageComposer.setState(ComposerState.Edit(item))
-            MessageDrawerActionType.Delete, MessageDrawerActionType.Share, MessageDrawerActionType.Quote, MessageDrawerActionType.NewMessage -> {}
+          when (event) {
+            TimelineMessageDrawerActionType.Reply -> messageComposer.setState(
+              ComposerState.Reply(
+                item
+              )
+            )
+
+            TimelineMessageDrawerActionType.ThreadReply -> messageComposer.setState(
+              ComposerState.ThreadReply(
+                item
+              )
+            )
+
+            TimelineMessageDrawerActionType.React -> messageComposer.setState(
+              ComposerState.React(
+                item
+              )
+            )
+
+            TimelineMessageDrawerActionType.Edit -> messageComposer.setState(ComposerState.Edit(item))
+            TimelineMessageDrawerActionType.Delete, TimelineMessageDrawerActionType.Share, TimelineMessageDrawerActionType.Quote -> {}
           }
         }
       }
@@ -352,6 +316,8 @@ fun RoomRoute(
     Box(modifier = Modifier.background(color = Color.White)) {
       Scaffold(content = { padding ->
         MessageList(
+          navController,
+          timelineState = timelineState,
           padding = padding,
           lazyListState = lazyListState,
           messages = messages,
@@ -370,7 +336,7 @@ fun RoomRoute(
             }
           },
           onRoomDetailsClick = {
-            navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId}")
+            navController.navigate(Routes.RoomDetails.route + "/${timelineState.roomId()}")
             Toast.makeText(contextForToast, "Should open room details page", Toast.LENGTH_LONG)
               .show()
           },
@@ -419,16 +385,20 @@ fun RoomRoute(
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun MessageList(
+  navController: NavHostController,
+  timelineState: ITimeline,
   padding: PaddingValues,
   lazyListState: LazyListState,
-  messages: State<List<TimelineItemVariant>>,
+  messages: State<List<IEvent>>,
   itemActionsBottomSheetState: ModalBottomSheetState,
-  clickedItemPublisher: MutableState<TimelineItemVariant.Event?>,
+  clickedItemPublisher: MutableState<IEvent.Event?>,
   requestMore: () -> Unit,
 ) {
   fun reachedTopOfList(index: Int): Boolean {
     return index == 0
   }
+
+  val paginationState = remember { timelineState.canUpdateStateProducer().value }
 
   val coroutineScope = rememberCoroutineScope()
   LazyColumn(
@@ -443,32 +413,40 @@ fun MessageList(
     itemsIndexed(
       items = messages.value,
       contentType = { _, timelineItem -> timelineItem.contentType() },
-      key = { _, timelineItem -> timelineItem.id() },
+      key = { _, timelineItem -> timelineItem.lazyListId() },
     ) { index, timelineItem ->
       when (timelineItem) {
-        is TimelineItemVariant.Event -> {
-          if (timelineItem.userCanSee) {
-            RoomMessageItem(
-              item = timelineItem,
-              onClick = {
-                Log.d("RoomMessageItemClick", "Clicked message item")
-              },
-              onClickHold = {
-                coroutineScope.launch {
-                  itemActionsBottomSheetState.show()
-                  clickedItemPublisher.value = it
-                }
-              },
-            )
+        is IEvent.Event -> {
+          if (timelineItem.userCanSee && timelineItem.threadDetails == null) {
+            val lastMsg = remember { timelineState.getLatestSeenItemOfThread(timelineItem.eventId) }
+            Column {
+              RoomMessageItem(
+                item = timelineItem,
+                ifThreadLastMessage = lastMsg,
+                onClick = {
+                  if (timelineState.timelineHasThread(timelineItem.eventId)) {
+                    navController.navigate(Routes.Thread.route + "/${timelineItem.eventId}/${timelineState.roomId()}")
+                  } else {
+                    Log.d("RoomMessageItemClick", "Clicked message item $timelineItem.eventId")
+                  }
+                },
+                onClickHold = {
+                  coroutineScope.launch {
+                    itemActionsBottomSheetState.show()
+                    clickedItemPublisher.value = it
+                  }
+                },
+              )
+            }
           }
         }
 
-        is TimelineItemVariant.Virtual -> VirtualItem(timelineItem = timelineItem)
-        TimelineItemVariant.Unknown -> {}
-        is TimelineItemVariant.Fill -> {}
+        is IEvent.Virtual -> VirtualItem(timelineItem = timelineItem)
+        IEvent.Unknown -> {}
+        is IEvent.Fill -> {}
       }
 
-      if (reachedTopOfList(index)) {
+      if (reachedTopOfList(index) && paginationState.hasMore) {
         requestMore()
       }
     }
@@ -479,7 +457,7 @@ suspend fun searchTimeline(
   searchString: String,
   lazyListState: LazyListState,
   lastSearchHitIndex: MutableState<Int>,
-  messages: State<List<TimelineItemVariant>>,
+  messages: State<List<IEvent>>,
 ) {
   withContext(Dispatchers.IO) {
     var idx = lastSearchHitIndex.value
@@ -487,7 +465,7 @@ suspend fun searchTimeline(
     var found = false
     try {
       for (item in messages.value.subList(lastFound, messages.value.size)) {
-        if (item is TimelineItemVariant.Event && item.message is Message.Text) {
+        if (item is IEvent.Event && item.message is Message.Text) {
           if (idx != lastFound && item.message.body.contains(searchString)) {
             found = true
             break
@@ -511,7 +489,7 @@ suspend fun searchTimeline(
 }
 
 @Composable
-fun VirtualItem(timelineItem: TimelineItemVariant.Virtual) {
+fun VirtualItem(timelineItem: IEvent.Virtual) {
   Spacer(modifier = Modifier.height(5.dp))
   CenteredRow(
     modifier = Modifier.fillMaxWidth(),
@@ -534,3 +512,57 @@ fun VirtualItem(timelineItem: TimelineItemVariant.Virtual) {
 // we have to compare (less-than) against 3, to "be sure" that we're at the end. Seems lazy column isn't *exact* in it's measurements
 fun LazyListState.isScrolledToTheEnd() =
   (layoutInfo.totalItemsCount - (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0)) < 3
+
+@Immutable
+enum class TimelineMessageDrawerActionType {
+  Reply, ThreadReply, React, Edit, Delete, Share, Quote
+}
+
+object TimelineMessageDrawer : MessageDrawerContentInterface<TimelineMessageDrawerActionType> {
+  private val actions = persistentListOf(
+    MessageDrawerAction(
+      "Reply",
+      Icons.Default.Send,
+      desc = "Reply to message",
+      action = TimelineMessageDrawerActionType.Reply
+    ),
+    MessageDrawerAction(
+      "Reply in thread",
+      Icons.Default.Refresh,
+      desc = "Reply in thread",
+      action = TimelineMessageDrawerActionType.ThreadReply
+    ),
+    MessageDrawerAction(
+      "Reaction",
+      Icons.Default.ThumbUp,
+      desc = "React to message",
+      action = TimelineMessageDrawerActionType.React
+    ),
+    MessageDrawerAction(
+      "Edit",
+      Icons.Default.Edit,
+      desc = "Edit message",
+      action = TimelineMessageDrawerActionType.Edit
+    ),
+    MessageDrawerAction(
+      "Delete",
+      Icons.Default.Delete,
+      desc = "Delete message",
+      action = TimelineMessageDrawerActionType.Delete
+    ),
+    MessageDrawerAction(
+      "Share",
+      Icons.Default.Share,
+      desc = "Share",
+      action = TimelineMessageDrawerActionType.Share
+    ),
+    MessageDrawerAction(
+      "Quote",
+      Icons.Default.Favorite,
+      desc = "Quote",
+      action = TimelineMessageDrawerActionType.Quote
+    ),
+  )
+
+  override fun actions(): List<MessageDrawerAction<TimelineMessageDrawerActionType>> = actions
+}

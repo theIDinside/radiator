@@ -71,6 +71,10 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.7.1")
     implementation("androidx.compose.ui:ui:$composeVersion")
     implementation("androidx.compose.ui:ui-tooling-preview:$composeVersion")
+
+    // unfortunately we have to pull in this "old" lib for ModalBottomSheetLayout
+    implementation("androidx.compose.material:material")
+
     implementation("androidx.compose.material3:material3:1.1.0-rc01")
 
     testImplementation("junit:junit:4.13.2")

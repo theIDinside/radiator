@@ -49,10 +49,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.app.radiator.R
+import com.app.radiator.matrix.timeline.IEvent
+import com.app.radiator.matrix.timeline.ITimeline
 import com.app.radiator.matrix.timeline.Message
 import com.app.radiator.matrix.timeline.TimelineAction
-import com.app.radiator.matrix.timeline.TimelineItemVariant
-import com.app.radiator.matrix.timeline.TimelineState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -84,18 +84,18 @@ sealed interface ComposerState {
   object NewMessage : ComposerState
 
   @Immutable
-  data class Reply(val item: TimelineItemVariant.Event) : ComposerState
+  data class Reply(val item: IEvent.Event) : ComposerState
 
   @Immutable
-  data class React(val item: TimelineItemVariant.Event) : ComposerState
+  data class React(val item: IEvent.Event) : ComposerState
 
   @Immutable
-  data class Edit(val item: TimelineItemVariant.Event) : ComposerState
+  data class Edit(val item: IEvent.Event) : ComposerState
 
   @Immutable
-  data class ThreadReply(val item: TimelineItemVariant.Event) : ComposerState
+  data class ThreadReply(val item: IEvent.Event) : ComposerState
 
-  fun timelineItem(): TimelineItemVariant.Event? {
+  fun timelineItem(): IEvent.Event? {
     return when (this) {
       NewMessage -> null
       is Edit -> item
@@ -108,7 +108,7 @@ sealed interface ComposerState {
 
 class MessageComposerState(
   private val composerCoroutineScope: CoroutineScope,
-  private val timeline: TimelineState,
+  private val timeline: ITimeline,
 ) {
   val flow = MutableStateFlow<ComposerState>(ComposerState.NewMessage)
   private var msgContent = mutableStateOf("")
@@ -140,22 +140,22 @@ class MessageComposerState(
 
       is ComposerState.Edit -> {
         asText(state.item.message)?.let { updateText(it.body) }
-        setCurrentAction(ComposerAction.Edit(state.item.eventId!!))
+        setCurrentAction(ComposerAction.Edit(state.item.eventId))
       }
 
       is ComposerState.React -> {
         updateText("")
-        setCurrentAction(ComposerAction.React(state.item.eventId!!))
+        setCurrentAction(ComposerAction.React(state.item.eventId))
       }
 
       is ComposerState.Reply -> {
         updateText("")
-        setCurrentAction(ComposerAction.Reply(state.item.eventId!!))
+        setCurrentAction(ComposerAction.Reply(state.item.eventId))
       }
 
       is ComposerState.ThreadReply -> {
         updateText("")
-        setCurrentAction(ComposerAction.ThreadReply(state.item.eventId!!))
+        setCurrentAction(ComposerAction.ThreadReply(state.item.eventId))
       }
     }
     composerCoroutineScope.launch {
@@ -173,13 +173,13 @@ class MessageComposerState(
         this.msgContent.value, act.eventId
       )
     }
-    timeline.send(timelineAction)
+    timeline.timelineSend(timelineAction)
     setState(ComposerState.NewMessage)
   }
 }
 
-fun showAddOnToMessage(toastContext: Context) {
-  Toast.makeText(toastContext, "Add images, links, etc...", Toast.LENGTH_LONG).show()
+fun showAddOnToMessage(toastContext: Context, string: String) {
+  Toast.makeText(toastContext, string, Toast.LENGTH_LONG).show()
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -203,7 +203,7 @@ fun DisplayComposerEditor(messageComposer: MessageComposerState) {
             .background(color = Color.White)
             .size(35.dp)
             .offset(x = 2.5.dp),
-          onClick = { showAddOnToMessage(mContext) },
+          onClick = { showAddOnToMessage(mContext, "Add images, links, etc...") },
           colors = ButtonDefaults.buttonColors(
             containerColor = Color.LightGray,
             contentColor = Color.Black,

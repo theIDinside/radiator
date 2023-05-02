@@ -89,11 +89,11 @@ fun InReplyToCard(avatarData: AvatarData?, onClickUserRepliedTo: () -> Unit) {
 fun ReplyItem(
   repliedTo: AnnotatedString = AnnotatedString("Foo\nBar"),
   avatarData: AvatarData? = AvatarData(
-    id = preview.sender, name = preview.senderProfile.displayName(), url = null
+    id = preview.senderId, name = preview.senderProfile.displayName(), url = null
   ),
   onClickUserRepliedTo: () -> Unit = {},
 ) {
-  ReplyBox() {
+  ReplyBox {
     Column(modifier = Modifier.replyModifier()) {
       InReplyToCard(avatarData=avatarData, onClickUserRepliedTo = onClickUserRepliedTo)
       Text(text = repliedTo, modifier = Modifier.fillMaxWidth().padding(start = 5.dp))

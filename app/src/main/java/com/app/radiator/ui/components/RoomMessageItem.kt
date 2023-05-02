@@ -59,7 +59,24 @@ val previewReactions = listOf(
   Reaction("\uD83E\uDD28", 13u)
 ).sortedBy { it.count }
 
-val preview = TimelineItemVariant.Event(
+val preview = IEvent.Event(
+  lazyListId = Math.random().toInt(),
+  eventId = "eventId",
+  reactions = previewReactions,
+  senderId = "@simonfarre:matrix.org",
+  senderProfile = ProfileDetails.Ready(
+    avatarUrl = null, displayName = "simonfarre", displayNameAmbiguous = false
+  ),
+  timestamp = 0u,
+  message = Message.Text(
+    body = "Text message", isEdited = false, formatted = null
+  ),
+  groupedByUser = false,
+  threadDetails = null,
+  inReplyTo = null
+)
+/*
+val previewOld = TimelineItemVariant.Event(
   id = Math.random().toInt(),
   uniqueIdentifier = "uniqueId",
   eventId = "eventId",
@@ -70,15 +87,18 @@ val preview = TimelineItemVariant.Event(
   localSendState = EventSendState.Sent("eventId"),
   reactions = previewReactions,
   sender = "@simonfarre:matrix.org",
-  senderProfile = org.matrix.rustcomponents.sdk.ProfileDetails.Ready(
-    avatarUrl=null, displayName = "simonfarre", displayNameAmbiguous = false
+  senderProfile = ProfileDetails.Ready(
+    avatarUrl = null, displayName = "simonfarre", displayNameAmbiguous = false
   ),
   timestamp = 0u,
   message = Message.Text(
-    body = "Text message", inReplyTo = null, isEdited = false, formatted = null
+    body = "Text message", isEdited = false, formatted = null
   ),
-  groupedByUser = false
+  groupedByUser = false,
+  threadDetails = null,
+  inReplyTo = null
 )
+*/
 
 val RoomViewLeftOffset = 7.dp
 
@@ -102,7 +122,7 @@ fun DayDivider(date: String = "April 10, 2023") {
     Text(date, fontSize = 10.sp)
     Box(
       modifier = Modifier
-        .offset(x = -35.dp)
+        .offset(x = (-35).dp)
         .size(width = 100.dp, height = 1.dp)
         .background(Color.DarkGray)
         .align(Alignment.CenterEnd)
@@ -114,13 +134,13 @@ fun DayDivider(date: String = "April 10, 2023") {
 @Preview
 @Composable
 fun TestTwoTextFieldsAsNewline() {
-  Column() {
+  Column {
     Text(text = "Foo")
     Text(text = "Bar")
     Text(text = "Foo\nBar")
   }
 }
-
+// TODO: write actual click handlers for our custom "DOM tree" nodes
 val parsedNodeClickHandlerLogger: (node: ParsedMessageNode) -> Unit = {
   when (it) {
     is ParsedMessageNode.CodeBlock -> Log.d(
@@ -160,7 +180,7 @@ val parsedNodeClickHandlerLogger: (node: ParsedMessageNode) -> Unit = {
 }
 
 @Composable
-fun TimelineItemVariant.Event.timeStamp(): AnnotatedString = remember {
+fun IEvent.Event.timeStamp(): AnnotatedString = remember {
   val messageTimeStampText =
     SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp.toLong())).toString()
   buildAnnotatedString {
@@ -171,10 +191,10 @@ fun TimelineItemVariant.Event.timeStamp(): AnnotatedString = remember {
 }
 
 @Composable
-fun TimelineItemVariant.Event.userNameDisplay(): AnnotatedString = remember {
+fun IEvent.Event.userNameDisplay(): AnnotatedString = remember {
   buildAnnotatedString {
     withStyle(SpanStyle(color = Color(255, 165, 0))) {
-      append(senderProfile.displayName() ?: sender)
+      append(senderProfile.displayName() ?: senderId)
     }
   }
 }
@@ -183,9 +203,9 @@ fun TimelineItemVariant.Event.userNameDisplay(): AnnotatedString = remember {
 @Composable
 fun RoomMessageItem(
   modifier: Modifier = Modifier,
-  item: TimelineItemVariant.Event = preview,
+  item: IEvent.Event = preview,
 ) {
-  RoomMessageItem(modifier=modifier, item=item, onClick = {}, onClickHold = {})
+  RoomMessageItem(modifier = modifier, item = item, onClick = {}, onClickHold = {})
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -193,9 +213,10 @@ fun RoomMessageItem(
 @Composable
 fun RoomMessageItem(
   modifier: Modifier = Modifier,
-  item: TimelineItemVariant.Event = preview,
+  item: IEvent.Event = preview,
+  ifThreadLastMessage: IEvent.Event? = null,
   onClick: () -> Unit = {},
-  onClickHold: (TimelineItemVariant.Event) -> Unit = {},
+  onClickHold: (IEvent.Event) -> Unit = {},
 ) {
   val interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
   Box(
@@ -210,14 +231,14 @@ fun RoomMessageItem(
         .padding(end = 5.dp)
         .fillMaxWidth()
     ) {
-      Column() {
+      Column {
         if (!item.groupedByUser) {
           Row(
             modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
-            val avatar = item.senderProfile.avatarData(item.sender)
+            val avatar = item.senderProfile.avatarData(item.senderId)
             if (avatar != null) {
               Avatar(avatarData = avatar, size = 25.dp)
             }
@@ -246,13 +267,15 @@ fun RoomMessageItem(
             when (val contentTypeItem = item.message) {
               is Message.Text -> {
                 RoomTextMessage(
-                  sender = item.sender,
+                  sender = item.senderId,
                   textMsg = contentTypeItem,
                   onClick = onClick,
                   onClickHold = {
                     onClickHold(item)
                   },
-                  interactionSource = interactionSource
+                  interactionSource = interactionSource,
+                  inReplyTo = item.inReplyTo,
+                  is_in_thread_reply = item.threadDetails?.let { !it.isFallback } ?: true
                 )
               }
 
@@ -271,7 +294,7 @@ fun RoomMessageItem(
               is Message.ProfileChange -> {}
               is Message.RoomMembership -> RoomMembership(msg = contentTypeItem)
               is Message.State ->
-                contentTypeItem.content.displayText(item.sender)?.let {
+                contentTypeItem.content.displayText(item.senderId)?.let {
                   SubtleRoomNotification(text = it)
                 }
 
@@ -283,12 +306,20 @@ fun RoomMessageItem(
               is Message.File,
               is Message.Notice,
               is Message.Sticker,
-              is Message.Video
-              -> Text(text = "Type: ${contentTypeItem}, ${contentTypeItem.toString()}")
+              is Message.Video,
+              -> Text(text = "Type: ${contentTypeItem}, $contentTypeItem")
+            }
+            if(ifThreadLastMessage != null) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth(0.7f),
+              ) {
+                LastMessage(event = ifThreadLastMessage)
+              }
             }
           }
         }
-        Row() {
+        Row {
           item.reactions.Display()
         }
       }
@@ -327,9 +358,11 @@ fun RoomTextMessage(
   onClick: () -> Unit,
   onClickHold: () -> Unit,
   interactionSource: MutableInteractionSource,
+  inReplyTo: InReplyToDetails?,
+  is_in_thread_reply: Boolean = true,
 ) {
-  if (textMsg.inReplyTo != null) {
-    when (val innerItem = textMsg.inReplyTo.event) {
+  if (inReplyTo != null && is_in_thread_reply) {
+    when (val innerItem = inReplyTo.event) {
       is RepliedToEventDetails.Ready -> {
         when (val msg = innerItem.message) {
           is Message.Text -> {
@@ -345,6 +378,7 @@ fun RoomTextMessage(
               )
             }
           }
+
           else -> {}
         }
       }
@@ -419,7 +453,7 @@ fun RoomTextMessage(
       onTextLayout = { layoutResult.value = it }
     )
   }
-  if(textMsg.isEdited) {
+  if (textMsg.isEdited) {
     SubtleRoomNotification(text = "(edited)")
   }
 }
