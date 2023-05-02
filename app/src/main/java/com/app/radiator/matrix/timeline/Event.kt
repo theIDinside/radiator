@@ -42,15 +42,27 @@ sealed interface ProfileDetails {
 
 fun org.matrix.rustcomponents.sdk.ProfileDetails.marshal(): ProfileDetails {
   return when (this) {
-    is org.matrix.rustcomponents.sdk.ProfileDetails.Error -> ProfileDetails.Error(message = message)
-    is org.matrix.rustcomponents.sdk.ProfileDetails.Ready -> ProfileDetails.Ready(
-      avatarUrl = this.avatarUrl,
-      displayName = displayName,
-      displayNameAmbiguous = displayNameAmbiguous
-    )
+    is org.matrix.rustcomponents.sdk.ProfileDetails.Error -> {
+      Log.d("ProfileDetails", "Profile details error $message")
+      ProfileDetails.Error(message = message)
+    }
+    is org.matrix.rustcomponents.sdk.ProfileDetails.Ready -> {
+      Log.d("ProfileDetails", "Profile details ready with url: $avatarUrl | displayname: $displayName")
+      ProfileDetails.Ready(
+        avatarUrl = this.avatarUrl,
+        displayName = displayName,
+        displayNameAmbiguous = displayNameAmbiguous
+      )
+    }
 
-    org.matrix.rustcomponents.sdk.ProfileDetails.Pending -> ProfileDetails.Pending
-    org.matrix.rustcomponents.sdk.ProfileDetails.Unavailable -> ProfileDetails.Unavailable
+    org.matrix.rustcomponents.sdk.ProfileDetails.Pending -> {
+      Log.d("ProfileDetails", "Profile details pending")
+      ProfileDetails.Pending
+    }
+    org.matrix.rustcomponents.sdk.ProfileDetails.Unavailable -> {
+      Log.d("ProfileDetails", "Profile details unavailable")
+      ProfileDetails.Unavailable
+    }
   }
 }
 
@@ -582,10 +594,9 @@ fun org.matrix.rustcomponents.sdk.Message.marshal(
           null
         }
       } else null
-      val body_ = body()
       Triple(
         Message.Text(
-          body = body_, isEdited = isEdited(), formatted = mxStripped, document = doc
+          body = body(), isEdited = isEdited(), formatted = mxStripped, document = doc
         ),
         inReplyDetails, inThreadDetails
       )

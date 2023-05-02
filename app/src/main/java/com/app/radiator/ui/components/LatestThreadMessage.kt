@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,7 +56,9 @@ fun LastMessage(event: IEvent.Event) {
       contentDescription = "",
       tint = Color(193, 200, 217)
     )
-    Avatar(avatarData = event.senderProfile.avatarData(event.senderId)!!, size = 20.dp)
+    val avatar = remember { event.senderProfile.avatarData(event.senderId) }
+    if(avatar != null)
+      Avatar(avatarData = avatar, size = 20.dp)
     when (event.message) {
       is Message.Audio -> LastMessageText(event.message.body)
       is Message.Emote -> LastMessageText(event.message.body)

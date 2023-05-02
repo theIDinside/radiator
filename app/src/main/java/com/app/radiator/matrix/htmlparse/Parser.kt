@@ -401,8 +401,8 @@ class DomFontStyleNode(openTag: ParsedTag.OpenTag, parentNode: DomNode?, private
       FontStyleType.Emphasis -> tag == Tag.EM
       FontStyleType.Italic -> tag == Tag.I
       FontStyleType.Strong -> tag == Tag.STRONG
+      FontStyleType.StrikeThrough -> tag == Tag.DEL
       FontStyleType.Underline -> TODO("Parsing of underline font styling not implemented")
-      FontStyleType.StrikeThrough -> TODO("Parsing of strike-through font styling not implemented")
     }
   }
 }
