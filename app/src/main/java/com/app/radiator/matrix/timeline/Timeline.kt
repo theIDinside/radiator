@@ -60,11 +60,19 @@ class TimelineStateObject(
 
   // Thread related logic
   private val doUpdateOfThreadRoots: (IEvent.Event) -> Unit = { item ->
-    item.threadDetails?.let { seenThreadRoots.add(item.threadDetails.threadId) }
+    item.threadDetails?.let {
+      seenThreadRoots[item.threadDetails.threadId]?.let {
+        if(it.timestamp < item.timestamp) {
+          seenThreadRoots[item.threadDetails.threadId] = item
+        }
+      } ?: run {
+        seenThreadRoots[item.threadDetails.threadId] = item
+      }
+    }
   }
 
   private var currentlyOpenThread: String? = null
-  private val seenThreadRoots = HashSet<String>()
+  private val seenThreadRoots = HashMap<String, IEvent.Event>()
   private val threadItemProducer = MutableStateFlow(emptyList<IEvent>().toImmutableList())
   val threadSubscriber = threadItemProducer.asStateFlow()
 
@@ -101,6 +109,10 @@ class TimelineStateObject(
 
   override fun timelineHasThread(eventId: String): Boolean {
     return seenThreadRoots.contains(eventId)
+  }
+
+  override fun getLatestSeenItemOfThread(eventId: String): IEvent.Event? {
+    return seenThreadRoots[eventId]
   }
 
   override fun threadItemFlow(threadId: String): StateFlow<List<IEvent>> {

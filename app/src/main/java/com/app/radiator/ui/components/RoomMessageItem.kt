@@ -214,6 +214,7 @@ fun RoomMessageItem(
 fun RoomMessageItem(
   modifier: Modifier = Modifier,
   item: IEvent.Event = preview,
+  ifThreadLastMessage: IEvent.Event? = null,
   onClick: () -> Unit = {},
   onClickHold: (IEvent.Event) -> Unit = {},
 ) {
@@ -307,6 +308,14 @@ fun RoomMessageItem(
               is Message.Sticker,
               is Message.Video,
               -> Text(text = "Type: ${contentTypeItem}, $contentTypeItem")
+            }
+            if(ifThreadLastMessage != null) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth(0.7f),
+              ) {
+                LastMessage(event = ifThreadLastMessage)
+              }
             }
           }
         }

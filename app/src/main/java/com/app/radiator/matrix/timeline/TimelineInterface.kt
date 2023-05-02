@@ -13,6 +13,7 @@ interface ITimeline : TimelineListener {
 
   fun subscribeTimeline(): StateFlow<ImmutableList<IEvent>>
   fun timelineHasThread(eventId: String): Boolean
+  fun getLatestSeenItemOfThread(eventId: String): IEvent.Event?
 
   fun threadItemFlow(threadId: String): StateFlow<List<IEvent>>
   fun isInit(): Flow<Boolean>

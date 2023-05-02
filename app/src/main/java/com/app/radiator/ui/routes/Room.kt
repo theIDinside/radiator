@@ -288,9 +288,24 @@ fun RoomRoute(
           itemActionsBottomSheetState.hide()
           val item = clickedItem.value!!.copy(reactions = listOf())
           when (event) {
-            TimelineMessageDrawerActionType.Reply -> messageComposer.setState(ComposerState.Reply(item))
-            TimelineMessageDrawerActionType.ThreadReply -> messageComposer.setState(ComposerState.ThreadReply(item))
-            TimelineMessageDrawerActionType.React -> messageComposer.setState(ComposerState.React(item))
+            TimelineMessageDrawerActionType.Reply -> messageComposer.setState(
+              ComposerState.Reply(
+                item
+              )
+            )
+
+            TimelineMessageDrawerActionType.ThreadReply -> messageComposer.setState(
+              ComposerState.ThreadReply(
+                item
+              )
+            )
+
+            TimelineMessageDrawerActionType.React -> messageComposer.setState(
+              ComposerState.React(
+                item
+              )
+            )
+
             TimelineMessageDrawerActionType.Edit -> messageComposer.setState(ComposerState.Edit(item))
             TimelineMessageDrawerActionType.Delete, TimelineMessageDrawerActionType.Share, TimelineMessageDrawerActionType.Quote -> {}
           }
@@ -403,22 +418,26 @@ fun MessageList(
       when (timelineItem) {
         is IEvent.Event -> {
           if (timelineItem.userCanSee && timelineItem.threadDetails == null) {
-            RoomMessageItem(
-              item = timelineItem,
-              onClick = {
-                if (timelineState.timelineHasThread(timelineItem.eventId)) {
-                  navController.navigate(Routes.Thread.route + "/${timelineItem.eventId}/${timelineState.roomId()}")
-                } else {
-                  Log.d("RoomMessageItemClick", "Clicked message item $timelineItem.eventId")
-                }
-              },
-              onClickHold = {
-                coroutineScope.launch {
-                  itemActionsBottomSheetState.show()
-                  clickedItemPublisher.value = it
-                }
-              },
-            )
+            val lastMsg = remember { timelineState.getLatestSeenItemOfThread(timelineItem.eventId) }
+            Column {
+              RoomMessageItem(
+                item = timelineItem,
+                ifThreadLastMessage = lastMsg,
+                onClick = {
+                  if (timelineState.timelineHasThread(timelineItem.eventId)) {
+                    navController.navigate(Routes.Thread.route + "/${timelineItem.eventId}/${timelineState.roomId()}")
+                  } else {
+                    Log.d("RoomMessageItemClick", "Clicked message item $timelineItem.eventId")
+                  }
+                },
+                onClickHold = {
+                  coroutineScope.launch {
+                    itemActionsBottomSheetState.show()
+                    clickedItemPublisher.value = it
+                  }
+                },
+              )
+            }
           }
         }
 
@@ -501,17 +520,49 @@ enum class TimelineMessageDrawerActionType {
 
 object TimelineMessageDrawer : MessageDrawerContentInterface<TimelineMessageDrawerActionType> {
   private val actions = persistentListOf(
-    MessageDrawerAction("Reply", Icons.Default.Send, desc = "Reply to message", action = TimelineMessageDrawerActionType.Reply),
     MessageDrawerAction(
-      "Reply in thread", Icons.Default.Refresh, desc = "Reply in thread", action = TimelineMessageDrawerActionType.ThreadReply
+      "Reply",
+      Icons.Default.Send,
+      desc = "Reply to message",
+      action = TimelineMessageDrawerActionType.Reply
     ),
     MessageDrawerAction(
-      "Reaction", Icons.Default.ThumbUp, desc = "React to message", action = TimelineMessageDrawerActionType.React
+      "Reply in thread",
+      Icons.Default.Refresh,
+      desc = "Reply in thread",
+      action = TimelineMessageDrawerActionType.ThreadReply
     ),
-    MessageDrawerAction("Edit", Icons.Default.Edit, desc = "Edit message", action = TimelineMessageDrawerActionType.Edit),
-    MessageDrawerAction("Delete", Icons.Default.Delete, desc = "Delete message", action = TimelineMessageDrawerActionType.Delete),
-    MessageDrawerAction("Share", Icons.Default.Share, desc = "Share", action = TimelineMessageDrawerActionType.Share),
-    MessageDrawerAction("Quote", Icons.Default.Favorite, desc = "Quote", action = TimelineMessageDrawerActionType.Quote),
+    MessageDrawerAction(
+      "Reaction",
+      Icons.Default.ThumbUp,
+      desc = "React to message",
+      action = TimelineMessageDrawerActionType.React
+    ),
+    MessageDrawerAction(
+      "Edit",
+      Icons.Default.Edit,
+      desc = "Edit message",
+      action = TimelineMessageDrawerActionType.Edit
+    ),
+    MessageDrawerAction(
+      "Delete",
+      Icons.Default.Delete,
+      desc = "Delete message",
+      action = TimelineMessageDrawerActionType.Delete
+    ),
+    MessageDrawerAction(
+      "Share",
+      Icons.Default.Share,
+      desc = "Share",
+      action = TimelineMessageDrawerActionType.Share
+    ),
+    MessageDrawerAction(
+      "Quote",
+      Icons.Default.Favorite,
+      desc = "Quote",
+      action = TimelineMessageDrawerActionType.Quote
+    ),
   )
+
   override fun actions(): List<MessageDrawerAction<TimelineMessageDrawerActionType>> = actions
 }
